@@ -1,0 +1,310 @@
+{
+  "info": {
+    "name": "De Bedrijfsfiscalist API",
+    "description": "API collection for De Bedrijfsfiscalist Backend - Tax Calendar & Document Management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "your-api-key-here",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "your-jwt-token-here",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "123e4567-e89b-12d3-a456-426614174000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "API Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tax Calendar",
+      "item": [
+        {
+          "name": "Get Tax Calendar (Valid)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{clientId}}/tax/calendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{clientId}}", "tax", "calendar"]
+            }
+          }
+        },
+        {
+          "name": "Get Tax Calendar (With Filters)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{clientId}}/tax/calendar?from=2025-01-01&to=2025-12-31&status=pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{clientId}}", "tax", "calendar"],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2025-12-31"
+                },
+                {
+                  "key": "status",
+                  "value": "pending"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Tax Calendar (No API Key) - 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{clientId}}/tax/calendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{clientId}}", "tax", "calendar"]
+            }
+          }
+        },
+        {
+          "name": "Get Tax Calendar (No JWT) - 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{clientId}}/tax/calendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{clientId}}", "tax", "calendar"]
+            }
+          }
+        },
+        {
+          "name": "Get Tax Calendar (Wrong Client ID) - 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/987fcdeb-51a9-43d2-b654-123456789abc/tax/calendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "987fcdeb-51a9-43d2-b654-123456789abc", "tax", "calendar"]
+            }
+          }
+        },
+        {
+          "name": "Get Tax Calendar (Invalid UUID) - 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/invalid-uuid/tax/calendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "invalid-uuid", "tax", "calendar"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Get Documents (Valid)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{clientId}}/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{clientId}}", "documents"]
+            }
+          }
+        },
+        {
+          "name": "Get Documents (With Filters)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{clientId}}/documents?source=google_drive&kind=tax_document",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{clientId}}", "documents"],
+              "query": [
+                {
+                  "key": "source",
+                  "value": "google_drive"
+                },
+                {
+                  "key": "kind",
+                  "value": "tax_document"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Documents (No API Key) - 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/{{clientId}}/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "{{clientId}}", "documents"]
+            }
+          }
+        },
+        {
+          "name": "Get Documents (Wrong Client ID) - 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clients/987fcdeb-51a9-43d2-b654-123456789abc/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clients", "987fcdeb-51a9-43d2-b654-123456789abc", "documents"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
