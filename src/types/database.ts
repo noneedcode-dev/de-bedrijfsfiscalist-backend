@@ -69,3 +69,15 @@ export interface DbInvitation {
   updated_at: string;
 }
 
+export interface DbCompany {
+  id: string;
+  client_id: string;
+  name: string;
+  country: string | null;
+  kvk: string | null;
+  vat: string | null;
+  fiscal_year_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+

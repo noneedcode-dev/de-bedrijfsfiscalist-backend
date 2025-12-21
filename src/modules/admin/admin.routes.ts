@@ -444,3 +444,109 @@ adminRouter.post(
   })
 );
 
+/**
+ * POST /api/admin/clients/:clientId/companies
+ * Admin belirli bir client altında company oluşturur
+ */
+adminRouter.post(
+  '/clients/:clientId/companies',
+  [
+    param('clientId').isUUID().withMessage('Geçerli bir client UUID gerekli'),
+    body('name').isString().trim().notEmpty().withMessage('Company adı gerekli'),
+    body('country').optional().isString().trim(),
+    body('kvk').optional().isString().trim(),
+    body('vat').optional().isString().trim(),
+    body('fiscal_year_end').optional().isString().trim(),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId } = req.params;
+    const { name, country, kvk, vat, fiscal_year_end } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    // 1) Client'ın var olduğunu kontrol et
+    const { data: client, error: clientError } = await supabase
+      .from('clients')
+      .select('id, name')
+      .eq('id', clientId)
+      .single();
+
+    if (clientError || !client) {
+      if (clientError?.code === 'PGRST116') {
+        throw new AppError('Client bulunamadı', 404);
+      }
+      throw new AppError(`Client kontrol edilemedi: ${clientError?.message}`, 500);
+    }
+
+    // 2) Company oluştur (service role ile RLS bypass)
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .insert({
+        client_id: clientId,
+        name,
+        country: country ?? null,
+        kvk: kvk ?? null,
+        vat: vat ?? null,
+        fiscal_year_end: fiscal_year_end ?? null,
+      })
+      .select('*')
+      .single();
+
+    if (companyError || !company) {
+      throw new AppError(
+        `Company oluşturulamadı: ${companyError?.message ?? 'Bilinmeyen hata'}`,
+        500
+      );
+    }
+
+    logger.info('Company created by admin', {
+      companyId: company.id,
+      clientId,
+      adminId: req.user?.sub,
+    });
+
+    return res.status(201).json({
+      data: {
+        company,
+      },
+      meta: {
+        message: 'Company başarıyla oluşturuldu.',
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/clients/:clientId/companies
+ * Admin belirli bir client'ın tüm company'lerini listeler
+ */
+adminRouter.get(
+  '/clients/:clientId/companies',
+  [
+    param('clientId').isUUID().withMessage('Geçerli bir client UUID gerekli'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId } = req.params;
+    const supabase = createSupabaseAdminClient();
+
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new AppError(`Company'ler getirilemedi: ${error.message}`, 500);
+    }
+
+    return res.json({
+      data: data ?? [],
+      meta: {
+        count: data?.length ?? 0,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
