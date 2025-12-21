@@ -1,25 +1,23 @@
 // src/modules/auth/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { env } from '../../config/env';
 import { AuthUser } from '../../types/express';
-import { AppJwtPayload } from '../../types/auth';
 import { sendError } from '../../utils/sendError';
 import { logger } from '../../config/logger';
+import { createSupabaseAdminClient, createSupabaseUserClient } from '../../lib/supabaseClient';
 
 /**
  * Authentication middleware
- * Verifies JWT token from Authorization header and attaches user data to request
+ * Verifies Supabase token from Authorization header and attaches user data from app_users table
  */
-export function authenticateJWT(
+export async function authenticateJWT(
   req: Request,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    logger.warn('JWT authentication failed: missing authorization header', { ip: req.ip });
+    logger.warn('Authentication failed: missing authorization header', { ip: req.ip });
     sendError(res, 'Authorization header is missing', 401);
     return;
   }
@@ -27,7 +25,7 @@ export function authenticateJWT(
   const parts = authHeader.split(' ');
 
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
-    logger.warn('JWT authentication failed: invalid header format', { ip: req.ip });
+    logger.warn('Authentication failed: invalid header format', { ip: req.ip });
     sendError(res, 'Invalid authorization header format. Expected: Bearer <token>', 401);
     return;
   }
@@ -35,43 +33,61 @@ export function authenticateJWT(
   const token = parts[1];
 
   try {
-    const decoded = jwt.verify(token, env.supabase.jwtSecret) as AppJwtPayload;
+    // 1) Supabase token'ı doğrula
+    const supabaseUser = createSupabaseUserClient(token);
+    const { data: authData, error: authError } = await supabaseUser.auth.getUser();
 
-    const { sub, role, client_id } = decoded;
-
-    if (!sub || !role) {
-      sendError(res, 'Invalid token payload: missing required fields (sub, role)', 401);
+    if (authError || !authData?.user) {
+      logger.warn('Authentication failed: invalid or expired token', { ip: req.ip, error: authError?.message });
+      sendError(res, 'Invalid or expired token', 401);
       return;
     }
 
-    // Client user için client_id zorunlu, admin için opsiyonel
-    if (role === 'client' && !client_id) {
-      sendError(res, 'Invalid token payload: client_id is required for client role', 401);
+    const supabaseUserId = authData.user.id;
+
+    // 2) app_users tablosundan role ve client_id çek
+    const supabaseAdmin = createSupabaseAdminClient();
+    const { data: appUser, error: userError } = await supabaseAdmin
+      .from('app_users')
+      .select('id, role, client_id, email')
+      .eq('id', supabaseUserId)
+      .maybeSingle();
+
+    if (userError) {
+      logger.error('Authentication failed: error fetching user data', { 
+        ip: req.ip, 
+        supabaseUserId, 
+        error: userError 
+      });
+      sendError(res, 'Error fetching user data', 500);
       return;
     }
 
+    if (!appUser) {
+      logger.warn('Authentication failed: user not found in app_users', { 
+        ip: req.ip, 
+        supabaseUserId 
+      });
+      sendError(res, 'User not found', 404);
+      return;
+    }
+
+    // 3) req.user'a ata
     req.user = {
-      sub,
-      role,
-      client_id,
+      sub: appUser.id,
+      role: appUser.role,
+      client_id: appUser.client_id,
     } as AuthUser;
+
+    logger.debug('Authentication successful', {
+      userId: appUser.id,
+      role: appUser.role,
+      clientId: appUser.client_id,
+    });
 
     next();
   } catch (error) {
-    // Sıra önemli: TokenExpiredError, JsonWebTokenError'dan extend ediyor
-    if (error instanceof jwt.TokenExpiredError) {
-      logger.warn('JWT authentication failed: token expired', { ip: req.ip });
-      sendError(res, 'Token has expired', 401);
-      return;
-    }
-
-    if (error instanceof jwt.JsonWebTokenError) {
-      logger.warn('JWT authentication failed: invalid token', { ip: req.ip, error: error.message });
-      sendError(res, 'Invalid token', 401);
-      return;
-    }
-
-    logger.error('JWT authentication failed: verification error', { ip: req.ip, error });
+    logger.error('Authentication failed: unexpected error', { ip: req.ip, error });
     sendError(res, 'Token verification failed', 401);
   }
 }
@@ -112,14 +128,14 @@ export function requireRole(...allowedRoles: Array<'admin' | 'client'>) {
 
 /**
  * Optional authentication middleware
- * Verifies JWT token if present, but continues without error if absent
+ * Verifies Supabase token if present, but continues without error if absent
  * Useful for endpoints that can be both public and personalized
  */
-export function optionalAuth(
+export async function optionalAuth(
   req: Request,
   _res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
@@ -136,15 +152,28 @@ export function optionalAuth(
   const token = parts[1];
 
   try {
-    const decoded = jwt.verify(token, env.supabase.jwtSecret) as AppJwtPayload;
+    const supabaseUser = createSupabaseUserClient(token);
+    const { data: authData, error: authError } = await supabaseUser.auth.getUser();
 
-    const { sub, role, client_id } = decoded;
+    if (authError || !authData?.user) {
+      logger.debug('Optional auth: invalid token, continuing without user', { ip: req.ip });
+      return next();
+    }
 
-    if (sub && role) {
+    const supabaseUserId = authData.user.id;
+
+    const supabaseAdmin = createSupabaseAdminClient();
+    const { data: appUser } = await supabaseAdmin
+      .from('app_users')
+      .select('id, role, client_id, email')
+      .eq('id', supabaseUserId)
+      .maybeSingle();
+
+    if (appUser) {
       req.user = {
-        sub,
-        role,
-        client_id,
+        sub: appUser.id,
+        role: appUser.role,
+        client_id: appUser.client_id,
       } as AuthUser;
     }
   } catch (error) {
