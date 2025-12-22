@@ -18,7 +18,9 @@ export function initializeJobs(): void {
 
   logger.info('🚀 Initializing background jobs...');
 
-  // Job 1: Cleanup expired invitations (runs daily at 2 AM)
+  // Job 1: Cleanup expired invitations (runs daily at 2 AM UTC)
+  // NOTE: Container timezone is typically UTC in Railway/Vercel
+  // To use a different timezone, set TZ environment variable (e.g., TZ=Europe/Amsterdam)
   cron.schedule('0 2 * * *', async () => {
     logger.info('⏰ Running scheduled job: cleanup expired invitations');
     try {

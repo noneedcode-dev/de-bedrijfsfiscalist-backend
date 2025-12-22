@@ -29,6 +29,7 @@ comment on column public.companies.fiscal_year_end is 'Fiscal year end date (MM-
 alter table public.companies enable row level security;
 
 -- 5. RLS Policy: Client users can view their own company
+drop policy if exists "companies_client_select_own" on public.companies;
 create policy "companies_client_select_own"
 on public.companies
 for select
@@ -38,6 +39,7 @@ using (
 );
 
 -- 6. RLS Policy: Client users can update their own company
+drop policy if exists "companies_client_update_own" on public.companies;
 create policy "companies_client_update_own"
 on public.companies
 for update
@@ -50,6 +52,7 @@ with check (
 );
 
 -- 7. RLS Policy: Admin has full access to all companies
+drop policy if exists "companies_admin_full_access" on public.companies;
 create policy "companies_admin_full_access"
 on public.companies
 for all
