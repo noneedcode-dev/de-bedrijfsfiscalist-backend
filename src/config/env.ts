@@ -23,6 +23,10 @@ export const env = {
   port: parseInt(getRequiredEnv('PORT'), 10),
   nodeEnv: getRequiredEnv('NODE_ENV'),
   
+  // Frontend
+  frontendUrl: getRequiredEnv('FRONTEND_URL'),
+  allowedOrigins: getOptionalEnv('ALLOWED_ORIGINS')?.split(',').map(o => o.trim()) || [],
+  
   // Supabase
   supabase: {
     url: getRequiredEnv('SUPABASE_URL'),

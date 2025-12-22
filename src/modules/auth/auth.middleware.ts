@@ -77,6 +77,7 @@ export async function authenticateJWT(
       sub: appUser.id,
       role: appUser.role,
       client_id: appUser.client_id,
+      accessToken: token, // Store token for user-scoped Supabase client
     } as AuthUser;
 
     logger.debug('Authentication successful', {
@@ -174,6 +175,7 @@ export async function optionalAuth(
         sub: appUser.id,
         role: appUser.role,
         client_id: appUser.client_id,
+        accessToken: token, // Store token for user-scoped Supabase client
       } as AuthUser;
     }
   } catch (error) {

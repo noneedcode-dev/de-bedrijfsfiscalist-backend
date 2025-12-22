@@ -12,14 +12,18 @@ export interface InvitationEmailData {
 
 /**
  * Email service for sending notifications
- * MVP: Console-only implementation for development
- * TODO: Integrate with SendGrid/AWS SES for production
+ * 
+ * IMPORTANT: This is the SINGLE SOURCE OF TRUTH for all emails.
+ * Supabase Auth emails are disabled - we handle all email sending here.
+ * 
+ * Development: Logs to console
+ * Production: TODO - Integrate with SendGrid/AWS SES
  */
 export class EmailService {
   /**
    * Send invitation email to a new user
-   * Development: Logs to console instead of sending actual email
-   * Production: TODO - Integrate with real email provider
+   * This is the ONLY place invitation emails are sent from.
+   * Supabase Auth does NOT send invitation emails.
    */
   async sendInvitation(data: InvitationEmailData): Promise<void> {
     const emailContent = this.generateInvitationEmail(data);

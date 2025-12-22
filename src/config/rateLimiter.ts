@@ -55,3 +55,18 @@ export const authLimiter = rateLimit({
   skip: isDevelopment ? () => false : undefined,
 });
 
+/**
+ * Very strict rate limit for invitation endpoints (abuse prevention)
+ * 1 saatte IP başına max 10 request (dev: 50)
+ */
+export const invitationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: isDevelopment ? 50 : 10,
+  handler: (_req: Request, res: Response) => {
+    sendError(res, 'Invitation rate limit exceeded. Please try again later.', 429);
+  },
+  standardHeaders,
+  legacyHeaders,
+  skip: isDevelopment ? () => false : undefined,
+});
+

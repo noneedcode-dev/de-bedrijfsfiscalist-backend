@@ -1,15 +1,13 @@
 // src/modules/admin/admin.routes.ts
 import { Router, Request, Response } from 'express';
 import { query, param, body } from 'express-validator';
-import crypto from 'node:crypto';
 import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import { createSupabaseAdminClient } from '../../lib/supabaseClient';
 import { requireRole } from '../auth/auth.middleware';
 import { DbClient, DbAppUser, DbInvitation } from '../../types/database';
-import { emailService } from '../../lib/emailService';
 import { logger } from '../../config/logger';
-import { env } from '../../config/env';
+import { invitationService } from '../../services/invitationService';
 
 export const adminRouter = Router();
 
@@ -152,65 +150,38 @@ adminRouter.post(
 
     const clientId = client.id as string;
 
-    // 2) Opsiyonel: ilk kullanıcıyı oluştur (Supabase Auth ile)
+    // 2) Opsiyonel: ilk kullanıcıyı oluştur (standardized invitation flow)
     let createdUser: DbAppUser | null = null;
+    let createdInvitation: DbInvitation | null = null;
     if (firstUser?.email) {
       try {
         const userRole = firstUser.role ?? 'client';
         const userClientId = userRole === 'client' ? clientId : null;
 
-        // Supabase Auth'da kullanıcı oluştur ve davet et
-        const frontendUrl = env.nodeEnv === 'production' 
-          ? process.env.FRONTEND_URL 
-          : (process.env.FRONTEND_URL || 'http://localhost:3000');
+        // Use shared invitation service
+        const result = await invitationService.inviteUser(supabase, {
+          email: firstUser.email,
+          role: userRole,
+          client_id: userClientId,
+          full_name: firstUser.full_name ?? null,
+          invited_by: req.user?.sub,
+          clientName: client.name,
+        });
 
-        const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(
-          firstUser.email,
-          {
-            data: {
-              role: userRole,
-              client_id: userClientId,
-              full_name: firstUser.full_name ?? null,
-            },
-            redirectTo: `${frontendUrl}/accept-invite`,
-          }
-        );
+        createdUser = result.user;
+        createdInvitation = result.invitation;
 
-        if (authError || !authData.user) {
-          throw new Error(`Supabase Auth error: ${authError?.message ?? 'User creation failed'}`);
-        }
-
-        // app_users tablosuna Supabase Auth ID ile kaydet
-        const { data: userRow, error: userError } = await supabase
-          .from('app_users')
-          .insert({
-            id: authData.user.id, // Gerçek Supabase Auth ID
-            email: firstUser.email,
-            role: userRole,
-            client_id: userClientId,
-            full_name: firstUser.full_name ?? null,
-          })
-          .select('*')
-          .single();
-
-        if (userError || !userRow) {
-          // Rollback: Supabase Auth user'ı sil
-          await supabase.auth.admin.deleteUser(authData.user.id);
-          throw new Error(userError?.message ?? 'Kullanıcı oluşturulamadı');
-        }
-
-        createdUser = userRow as DbAppUser;
-
-        logger.info('First user created via Supabase Auth and invited', {
+        logger.info('First user invited via standardized flow', {
           userId: createdUser.id,
           email: createdUser.email,
           clientId,
+          invitationId: createdInvitation.id,
         });
       } catch (userCreationError: any) {
         // Rollback: client'ı geri sil
         await supabase.from('clients').delete().eq('id', clientId);
         throw new AppError(
-          `Client oluşturuldu ama ilk kullanıcı oluşturulamadı: ${userCreationError.message}`,
+          `Client oluşturuldu ama ilk kullanıcı davet edilemedi: ${userCreationError.message}`,
           500
         );
       }
@@ -224,6 +195,7 @@ adminRouter.post(
       data: {
         client: client as DbClient,
         firstUser: createdUser,
+        invitation: createdInvitation,
       },
       meta: {
         message: createdUser 
@@ -309,18 +281,7 @@ adminRouter.post(
     const { email, role, client_id, full_name } = req.body;
     const supabase = createSupabaseAdminClient();
 
-    // 1. Email'in zaten kayıtlı olup olmadığını kontrol et
-    const { data: existingUser } = await supabase
-      .from('app_users')
-      .select('id')
-      .eq('email', email)
-      .single();
-
-    if (existingUser) {
-      throw new AppError('Bu email adresi zaten kayıtlı', 400);
-    }
-
-    // 2. Client bilgisini al (client role için)
+    // Get client name for email (if client role)
     let clientName: string | undefined;
     if (role === 'client' && client_id) {
       const { data: clientData } = await supabase
@@ -331,110 +292,20 @@ adminRouter.post(
       clientName = clientData?.name;
     }
 
-    // 3. Davetiye token oluştur (72 saat geçerli)
-    const inviteToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 72);
-
-    // 4. Invitations tablosuna kaydet
-    const { data: invitation, error: inviteError } = await supabase
-      .from('invitations')
-      .insert({
-        email,
-        role,
-        client_id: role === 'client' ? client_id : null,
-        invited_by: req.user?.sub,
-        token: inviteToken,
-        expires_at: expiresAt.toISOString(),
-        status: 'pending',
-      })
-      .select('*')
-      .single();
-
-    if (inviteError || !invitation) {
-      throw new AppError(
-        `Davetiye oluşturulamadı: ${inviteError?.message ?? 'Bilinmeyen hata'}`,
-        500
-      );
-    }
-
-    // 5. Supabase Auth ile kullanıcı davet et
-    const frontendUrl = env.nodeEnv === 'production' 
-      ? process.env.FRONTEND_URL 
-      : (process.env.FRONTEND_URL || 'http://localhost:3000');
-
-    const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(
-      email,
-      {
-        data: {
-          role,
-          client_id: role === 'client' ? client_id : null,
-          full_name: full_name ?? null,
-          invitation_id: invitation.id,
-        },
-        redirectTo: `${frontendUrl}/accept-invite?token=${inviteToken}`,
-      }
-    );
-
-    if (authError || !authData.user) {
-      // Rollback: invitation kaydını sil
-      await supabase.from('invitations').delete().eq('id', invitation.id);
-      throw new AppError(
-        `Supabase Auth davetiye gönderilemedi: ${authError?.message}`,
-        500
-      );
-    }
-
-    // 6. app_users tablosuna Supabase Auth ID ile kaydet
-    const { data: userData, error: userError } = await supabase
-      .from('app_users')
-      .insert({
-        id: authData.user.id, // Gerçek Supabase Auth ID
-        email,
-        role,
-        client_id: role === 'client' ? client_id : null,
-        full_name: full_name ?? null,
-      })
-      .select('*')
-      .single();
-
-    if (userError) {
-      logger.error('User record creation failed after Auth invite', {
-        error: userError,
-        userId: authData.user.id,
-      });
-      // Don't rollback Auth user - they can still accept invite
-    }
-
-    // 7. Email gönder (console-only for development)
-    try {
-      const invitedByUser = req.user?.sub 
-        ? (await supabase.from('app_users').select('full_name').eq('id', req.user.sub).single()).data?.full_name 
-        : 'Admin';
-
-      await emailService.sendInvitation({
-        to: email,
-        invitedBy: invitedByUser || 'Admin',
-        clientName,
-        acceptUrl: `${frontendUrl}/accept-invite?token=${inviteToken}`,
-        expiresInHours: 72,
-      });
-    } catch (emailError) {
-      logger.error('Failed to send invitation email', { error: emailError, email });
-      // Don't fail the request if email fails
-    }
-
-    logger.info('User invited successfully', {
-      userId: authData.user.id,
+    // Use shared invitation service
+    const result = await invitationService.inviteUser(supabase, {
       email,
       role,
-      invitationId: invitation.id,
+      client_id: role === 'client' ? client_id : null,
+      full_name: full_name ?? null,
+      invited_by: req.user?.sub,
+      clientName,
     });
 
     return res.status(201).json({
       data: {
-        user: userData as DbAppUser,
-        invitation: invitation as DbInvitation,
+        user: result.user,
+        invitation: result.invitation,
       },
       meta: {
         message: 'Kullanıcı başarıyla davet edildi. Davetiye emaili gönderildi.',

@@ -12,7 +12,7 @@ import { requestIdMiddleware } from './middleware/requestId';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { validateClientAccess } from './middleware/clientAccess';
-import { healthLimiter, apiLimiter } from './config/rateLimiter';
+import { healthLimiter, apiLimiter, authLimiter, invitationLimiter } from './config/rateLimiter';
 import { healthRouter } from './modules/health/health.routes';
 import { taxCalendarRouter } from './modules/taxCalendar/taxCalendar.routes';
 import { documentsRouter } from './modules/documents/documents.routes';
@@ -36,7 +36,7 @@ export function createApp() {
   // CORS config (environment-specific)
   const corsOptions = {
     origin: env.nodeEnv === 'production' 
-      ? ['https://yourdomain.com', 'https://www.yourdomain.com']
+      ? [env.frontendUrl, ...env.allowedOrigins]
       : '*',
     credentials: true,
     optionsSuccessStatus: 200,
@@ -71,9 +71,12 @@ export function createApp() {
   app.use('/api', apiKeyMiddleware);
 
   // Auth routes: /api/auth/* (public - no JWT required for invitation acceptance)
-  app.use('/api/auth', authRouter);
+  // Apply auth rate limiter to prevent brute force attacks
+  app.use('/api/auth', authLimiter, authRouter);
 
   // Admin routes: /api/admin/* (requires JWT + admin role)
+  // Apply invitation limiter specifically to invitation endpoints
+  app.use('/api/admin/users/invite', invitationLimiter);
   app.use('/api/admin', authenticateJWT, adminRouter);
 
   // Client-scoped routes: require JWT + client access validation
