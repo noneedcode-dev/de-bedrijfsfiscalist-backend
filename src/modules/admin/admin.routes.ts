@@ -446,7 +446,8 @@ adminRouter.post(
 
 /**
  * POST /api/admin/clients/:clientId/companies
- * Admin belirli bir client altında company oluşturur
+ * Admin belirli bir client altında company oluşturur veya günceller (UPSERT)
+ * 1-to-1 ilişki: Her client'ın sadece 1 company'si olabilir
  */
 adminRouter.post(
   '/clients/:clientId/companies',
@@ -478,39 +479,42 @@ adminRouter.post(
       throw new AppError(`Client kontrol edilemedi: ${clientError?.message}`, 500);
     }
 
-    // 2) Company oluştur (service role ile RLS bypass)
+    // 2) Company upsert (client_id unique constraint ile)
+    const payload = {
+      client_id: clientId,
+      name,
+      country: country ?? null,
+      kvk: kvk ?? null,
+      vat: vat ?? null,
+      fiscal_year_end: fiscal_year_end ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
     const { data: company, error: companyError } = await supabase
       .from('companies')
-      .insert({
-        client_id: clientId,
-        name,
-        country: country ?? null,
-        kvk: kvk ?? null,
-        vat: vat ?? null,
-        fiscal_year_end: fiscal_year_end ?? null,
-      })
+      .upsert(payload, { onConflict: 'client_id' })
       .select('*')
       .single();
 
     if (companyError || !company) {
       throw new AppError(
-        `Company oluşturulamadı: ${companyError?.message ?? 'Bilinmeyen hata'}`,
+        `Company upsert edilemedi: ${companyError?.message ?? 'Bilinmeyen hata'}`,
         500
       );
     }
 
-    logger.info('Company created by admin', {
+    logger.info('Company upserted by admin', {
       companyId: company.id,
       clientId,
       adminId: req.user?.sub,
     });
 
-    return res.status(201).json({
+    return res.json({
       data: {
         company,
       },
       meta: {
-        message: 'Company başarıyla oluşturuldu.',
+        message: 'Company başarıyla kaydedildi.',
         timestamp: new Date().toISOString(),
       },
     });
@@ -519,7 +523,7 @@ adminRouter.post(
 
 /**
  * GET /api/admin/clients/:clientId/companies
- * Admin belirli bir client'ın tüm company'lerini listeler
+ * Admin belirli bir client'ın company'sini getirir (1-to-1 ilişki)
  */
 adminRouter.get(
   '/clients/:clientId/companies',
@@ -531,20 +535,22 @@ adminRouter.get(
     const { clientId } = req.params;
     const supabase = createSupabaseAdminClient();
 
-    const { data, error } = await supabase
+    const { data: company, error } = await supabase
       .from('companies')
       .select('*')
       .eq('client_id', clientId)
-      .order('created_at', { ascending: false });
+      .maybeSingle();
 
     if (error) {
-      throw new AppError(`Company'ler getirilemedi: ${error.message}`, 500);
+      throw new AppError(`Company getirilemedi: ${error.message}`, 500);
     }
 
     return res.json({
-      data: data ?? [],
+      data: {
+        company: company ?? null,
+      },
       meta: {
-        count: data?.length ?? 0,
+        message: 'Company getirildi.',
         timestamp: new Date().toISOString(),
       },
     });
