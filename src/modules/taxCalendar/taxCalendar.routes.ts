@@ -1,13 +1,20 @@
 // src/modules/taxCalendar/taxCalendar.routes.ts
 import { Router, Request, Response } from 'express';
 import { param, query } from 'express-validator';
-import { createSupabaseUserClient } from '../../lib/supabaseClient';
+import { createSupabaseAdminClient, createSupabaseUserClient } from '../../lib/supabaseClient';
 import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 
 export const taxCalendarRouter = Router({ mergeParams: true });
 
 const DEFAULT_TZ = process.env.APP_DEFAULT_TZ || 'Europe/Amsterdam';
+
+// Admin bypass: use service-role client to query across tenants; clients remain restricted by RLS.
+function getSupabase(req: any, accessToken: string) {
+  return req.user?.role === 'admin'
+    ? createSupabaseAdminClient()
+    : createSupabaseUserClient(accessToken);
+}
 
 function isoDateInTZ(timeZone: string = DEFAULT_TZ, date?: Date): string {
   const d = date || new Date();
@@ -127,7 +134,7 @@ taxCalendarRouter.get(
       throw new AppError('Missing Bearer token', 401);
     }
 
-    const supabase = createSupabaseUserClient(token);
+    const supabase = getSupabase(req, token);
 
     const { status, from, to, jurisdiction, tax_type } = req.query;
 
@@ -312,7 +319,7 @@ taxCalendarRouter.get(
       throw new AppError('Missing Bearer token', 401);
     }
 
-    const supabase = createSupabaseUserClient(token);
+    const supabase = getSupabase(req, token);
 
     const {
       status,
@@ -580,7 +587,7 @@ taxCalendarRouter.get(
       throw new AppError('Missing Bearer token', 401);
     }
 
-    const supabase = createSupabaseUserClient(token);
+    const supabase = getSupabase(req, token);
 
     const {
       months = '3',
