@@ -15,6 +15,7 @@ import { validateClientAccess } from './middleware/clientAccess';
 import { healthLimiter, apiLimiter, authLimiter, invitationLimiter } from './config/rateLimiter';
 import { healthRouter } from './modules/health/health.routes';
 import { taxCalendarRouter } from './modules/taxCalendar/taxCalendar.routes';
+import { taxRiskControlsRouter } from './modules/taxRiskControls/taxRiskControls.routes';
 import { documentsRouter } from './modules/documents/documents.routes';
 import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
@@ -83,6 +84,7 @@ export function createApp() {
   const clientRouter = express.Router({ mergeParams: true });
 
   clientRouter.use('/tax/calendar', taxCalendarRouter);
+  clientRouter.use('/tax/risk-controls', taxRiskControlsRouter);
   clientRouter.use('/documents', documentsRouter);
 
   app.use('/api/clients/:clientId', authenticateJWT, validateClientAccess, clientRouter);
