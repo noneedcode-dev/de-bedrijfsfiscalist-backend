@@ -40,7 +40,6 @@ function getSupabase(req: any, accessToken: string) {
  *             type: object
  *             required:
  *               - risk_description
- *               - owner
  *               - chance
  *               - impact
  *               - control_measure
@@ -53,8 +52,6 @@ function getSupabase(req: any, accessToken: string) {
  *                 format: uuid
  *                 description: Process ID (optional if process_name provided)
  *               risk_description:
- *                 type: string
- *               owner:
  *                 type: string
  *               response:
  *                 type: string
@@ -85,7 +82,6 @@ taxRiskControlsRouter.post(
     body('process_name').optional().isString().withMessage('process_name must be a string'),
     body('process_id').optional().isUUID().withMessage('Invalid process_id format'),
     body('risk_description').notEmpty().isString().withMessage('risk_description is required'),
-    body('owner').notEmpty().isString().withMessage('owner is required'),
     body('response')
       .optional()
       .isIn(['Mitigate', 'Monitor', 'Accept'])
@@ -113,18 +109,21 @@ taxRiskControlsRouter.post(
 
     const supabase = getSupabase(req, token);
 
+    if (!req.user) {
+      throw new AppError('User not authenticated', 401);
+    }
+
     const input: taxRiskControlsService.CreateRiskControlInput = {
       process_name: req.body.process_name,
       process_id: req.body.process_id,
       risk_description: req.body.risk_description,
-      owner: req.body.owner,
       response: req.body.response,
       chance: parseInt(req.body.chance, 10),
       impact: parseInt(req.body.impact, 10),
       control_measure: req.body.control_measure,
     };
 
-    const data = await taxRiskControlsService.createRiskControl(supabase, clientId, input);
+    const data = await taxRiskControlsService.createRiskControl(supabase, clientId, input, req.user);
 
     res.json({ data });
   })
@@ -369,8 +368,6 @@ taxRiskControlsRouter.get(
  *                 format: uuid
  *               risk_description:
  *                 type: string
- *               owner:
- *                 type: string
  *               response:
  *                 type: string
  *                 enum: [Mitigate, Monitor, Accept]
@@ -402,7 +399,6 @@ taxRiskControlsRouter.patch(
     body('process_name').optional().isString().withMessage('process_name must be a string'),
     body('process_id').optional().isUUID().withMessage('Invalid process_id format'),
     body('risk_description').optional().isString().withMessage('risk_description must be a string'),
-    body('owner').optional().isString().withMessage('owner must be a string'),
     body('response')
       .optional()
       .isIn(['Mitigate', 'Monitor', 'Accept'])
@@ -435,7 +431,6 @@ taxRiskControlsRouter.patch(
       process_name: req.body.process_name,
       process_id: req.body.process_id,
       risk_description: req.body.risk_description,
-      owner: req.body.owner,
       response: req.body.response,
       chance: req.body.chance !== undefined ? parseInt(req.body.chance, 10) : undefined,
       impact: req.body.impact !== undefined ? parseInt(req.body.impact, 10) : undefined,

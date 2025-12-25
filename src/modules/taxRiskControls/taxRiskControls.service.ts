@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../../middleware/errorHandler';
+import { AuthUser } from '../../types/express';
 
 export interface RiskScore {
   score: number;
@@ -51,7 +52,6 @@ export interface CreateRiskControlInput {
   process_name?: string;
   process_id?: string;
   risk_description: string;
-  owner: string;
   response?: string;
   chance: number;
   impact: number;
@@ -61,7 +61,8 @@ export interface CreateRiskControlInput {
 export async function createRiskControl(
   supabase: SupabaseClient,
   clientId: string,
-  input: CreateRiskControlInput
+  input: CreateRiskControlInput,
+  user: AuthUser
 ) {
   let processId = input.process_id || null;
 
@@ -71,11 +72,22 @@ export async function createRiskControl(
 
   const { score, color } = computeRisk(input.chance, input.impact);
 
+  const ownerUserId = user.sub;
+  const { data: appUserData } = await supabase
+    .from('app_users')
+    .select('email')
+    .eq('id', ownerUserId)
+    .single();
+
+  const ownerDisplay = appUserData?.email || ownerUserId;
+
   const insertData = {
     client_id: clientId,
     process_id: processId,
     risk_description: input.risk_description,
-    owner: input.owner,
+    owner_user_id: ownerUserId,
+    owner_display: ownerDisplay,
+    owner: ownerDisplay,
     response: input.response || 'Monitor',
     inherent_likelihood: input.chance,
     inherent_impact: input.impact,
@@ -199,7 +211,6 @@ export interface UpdateRiskControlInput {
   process_name?: string;
   process_id?: string;
   risk_description?: string;
-  owner?: string;
   response?: string;
   chance?: number;
   impact?: number;
@@ -234,10 +245,6 @@ export async function updateRiskControl(
 
   if (input.risk_description !== undefined) {
     updateData.risk_description = input.risk_description;
-  }
-
-  if (input.owner !== undefined) {
-    updateData.owner = input.owner;
   }
 
   if (input.response !== undefined) {
