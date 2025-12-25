@@ -56,6 +56,20 @@ export interface CreateRiskControlInput {
   chance: number;
   impact: number;
   control_measure: string;
+  owner_user_id?: string;
+}
+
+async function getUserDisplay(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<string> {
+  const { data: appUserData } = await supabase
+    .from('app_users')
+    .select('full_name, email')
+    .eq('id', userId)
+    .single();
+
+  return appUserData?.full_name || appUserData?.email || userId;
 }
 
 export async function createRiskControl(
@@ -72,19 +86,33 @@ export async function createRiskControl(
 
   const { score, color } = computeRisk(input.chance, input.impact);
 
-  const ownerUserId = user.sub;
-  const { data: appUserData } = await supabase
-    .from('app_users')
-    .select('email')
-    .eq('id', ownerUserId)
-    .single();
+  const createdByUserId = user.sub;
+  const createdByDisplay = await getUserDisplay(supabase, createdByUserId);
 
-  const ownerDisplay = appUserData?.email || ownerUserId;
+  let ownerUserId: string;
+  if (input.owner_user_id && user.role === 'admin') {
+    const { data: ownerExists } = await supabase
+      .from('app_users')
+      .select('id')
+      .eq('id', input.owner_user_id)
+      .single();
+
+    if (!ownerExists) {
+      throw new AppError('Invalid owner_user_id: user not found', 400);
+    }
+    ownerUserId = input.owner_user_id;
+  } else {
+    ownerUserId = createdByUserId;
+  }
+
+  const ownerDisplay = await getUserDisplay(supabase, ownerUserId);
 
   const insertData = {
     client_id: clientId,
     process_id: processId,
     risk_description: input.risk_description,
+    created_by_user_id: createdByUserId,
+    created_by_display: createdByDisplay,
     owner_user_id: ownerUserId,
     owner_display: ownerDisplay,
     owner: ownerDisplay,
@@ -215,13 +243,15 @@ export interface UpdateRiskControlInput {
   chance?: number;
   impact?: number;
   control_measure?: string;
+  owner_user_id?: string;
 }
 
 export async function updateRiskControl(
   supabase: SupabaseClient,
   clientId: string,
   id: string,
-  input: UpdateRiskControlInput
+  input: UpdateRiskControlInput,
+  user: AuthUser
 ) {
   const existing = await getRiskControlById(supabase, clientId, id);
 
@@ -253,6 +283,27 @@ export async function updateRiskControl(
 
   if (input.control_measure !== undefined) {
     updateData.control_description = input.control_measure;
+  }
+
+  if (input.owner_user_id !== undefined) {
+    if (user.role !== 'admin') {
+      throw new AppError('Only admins can change the owner', 403);
+    }
+
+    const { data: ownerExists } = await supabase
+      .from('app_users')
+      .select('id')
+      .eq('id', input.owner_user_id)
+      .single();
+
+    if (!ownerExists) {
+      throw new AppError('Invalid owner_user_id: user not found', 400);
+    }
+
+    const ownerDisplay = await getUserDisplay(supabase, input.owner_user_id);
+    updateData.owner_user_id = input.owner_user_id;
+    updateData.owner_display = ownerDisplay;
+    updateData.owner = ownerDisplay;
   }
 
   const { data, error } = await supabase

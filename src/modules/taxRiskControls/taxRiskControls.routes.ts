@@ -67,6 +67,10 @@ function getSupabase(req: any, accessToken: string) {
  *                 maximum: 5
  *               control_measure:
  *                 type: string
+ *               owner_user_id:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Owner user ID (admin only, defaults to creator)
  *     responses:
  *       200:
  *         description: Risk control created successfully
@@ -82,6 +86,7 @@ taxRiskControlsRouter.post(
     body('process_name').optional().isString().withMessage('process_name must be a string'),
     body('process_id').optional().isUUID().withMessage('Invalid process_id format'),
     body('risk_description').notEmpty().isString().withMessage('risk_description is required'),
+    body('owner_user_id').optional().isUUID().withMessage('Invalid owner_user_id format'),
     body('response')
       .optional()
       .isIn(['Mitigate', 'Monitor', 'Accept'])
@@ -121,6 +126,7 @@ taxRiskControlsRouter.post(
       chance: parseInt(req.body.chance, 10),
       impact: parseInt(req.body.impact, 10),
       control_measure: req.body.control_measure,
+      owner_user_id: req.body.owner_user_id,
     };
 
     const data = await taxRiskControlsService.createRiskControl(supabase, clientId, input, req.user);
@@ -381,6 +387,10 @@ taxRiskControlsRouter.get(
  *                 maximum: 5
  *               control_measure:
  *                 type: string
+ *               owner_user_id:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Owner user ID (admin only)
  *     responses:
  *       200:
  *         description: Risk control updated successfully
@@ -399,6 +409,7 @@ taxRiskControlsRouter.patch(
     body('process_name').optional().isString().withMessage('process_name must be a string'),
     body('process_id').optional().isUUID().withMessage('Invalid process_id format'),
     body('risk_description').optional().isString().withMessage('risk_description must be a string'),
+    body('owner_user_id').optional().isUUID().withMessage('Invalid owner_user_id format'),
     body('response')
       .optional()
       .isIn(['Mitigate', 'Monitor', 'Accept'])
@@ -427,6 +438,10 @@ taxRiskControlsRouter.patch(
 
     const supabase = getSupabase(req, token);
 
+    if (!req.user) {
+      throw new AppError('User not authenticated', 401);
+    }
+
     const input: taxRiskControlsService.UpdateRiskControlInput = {
       process_name: req.body.process_name,
       process_id: req.body.process_id,
@@ -435,9 +450,10 @@ taxRiskControlsRouter.patch(
       chance: req.body.chance !== undefined ? parseInt(req.body.chance, 10) : undefined,
       impact: req.body.impact !== undefined ? parseInt(req.body.impact, 10) : undefined,
       control_measure: req.body.control_measure,
+      owner_user_id: req.body.owner_user_id,
     };
 
-    const data = await taxRiskControlsService.updateRiskControl(supabase, clientId, id, input);
+    const data = await taxRiskControlsService.updateRiskControl(supabase, clientId, id, input, req.user);
 
     res.json({ data });
   })
