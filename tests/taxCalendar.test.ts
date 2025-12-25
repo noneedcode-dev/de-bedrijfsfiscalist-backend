@@ -36,5 +36,38 @@ describe('Tax Calendar API', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBeTruthy();
   });
+
+  it('GET /api/clients/:clientId/tax/calendar should validate limit range (too low)', async () => {
+    const res = await request(app)
+      .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar`)
+      .query({ limit: 0 })
+      .set('x-api-key', MOCK_API_KEY)
+      .set('Authorization', `Bearer ${MOCK_JWT_TOKEN}`);
+    
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('limit must be between 1 and 200');
+  });
+
+  it('GET /api/clients/:clientId/tax/calendar should validate limit range (too high)', async () => {
+    const res = await request(app)
+      .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar`)
+      .query({ limit: 201 })
+      .set('x-api-key', MOCK_API_KEY)
+      .set('Authorization', `Bearer ${MOCK_JWT_TOKEN}`);
+    
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('limit must be between 1 and 200');
+  });
+
+  it('GET /api/clients/:clientId/tax/calendar should validate offset (negative)', async () => {
+    const res = await request(app)
+      .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar`)
+      .query({ offset: -1 })
+      .set('x-api-key', MOCK_API_KEY)
+      .set('Authorization', `Bearer ${MOCK_JWT_TOKEN}`);
+    
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('offset must be a non-negative integer');
+  });
 });
 

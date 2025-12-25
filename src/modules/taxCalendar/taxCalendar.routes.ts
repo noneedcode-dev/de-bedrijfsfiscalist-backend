@@ -4,10 +4,9 @@ import { param, query } from 'express-validator';
 import { createSupabaseAdminClient, createSupabaseUserClient } from '../../lib/supabaseClient';
 import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
+import * as taxCalendarService from './taxCalendar.service';
 
 export const taxCalendarRouter = Router({ mergeParams: true });
-
-const DEFAULT_TZ = process.env.APP_DEFAULT_TZ || 'Europe/Amsterdam';
 
 // Admin bypass: use service-role client to query across tenants; clients remain restricted by RLS.
 function getSupabase(req: any, accessToken: string) {
@@ -16,34 +15,12 @@ function getSupabase(req: any, accessToken: string) {
     : createSupabaseUserClient(accessToken);
 }
 
-function isoDateInTZ(timeZone: string = DEFAULT_TZ, date?: Date): string {
-  const d = date || new Date();
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
-}
-
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function addMonths(date: Date, months: number): Date {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
-}
-
 /**
  * @openapi
  * /api/clients/{clientId}/tax/calendar:
  *   get:
  *     summary: Get tax calendar entries
- *     description: Retrieve tax calendar entries for a specific client with optional filters
+ *     description: Retrieve tax calendar entries for a specific client with optional filters and pagination
  *     tags:
  *       - Tax Calendar
  *     security:
@@ -84,9 +61,24 @@ function addMonths(date: Date, months: number): Date {
  *         schema:
  *           type: string
  *         description: Filter by tax type
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 200
+ *           default: 50
+ *         description: Maximum number of entries to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *         description: Number of entries to skip for pagination
  *     responses:
  *       200:
- *         description: List of tax calendar entries
+ *         description: List of tax calendar entries with pagination metadata
  *         content:
  *           application/json:
  *             schema:
@@ -101,6 +93,19 @@ function addMonths(date: Date, months: number): Date {
  *                   properties:
  *                     count:
  *                       type: number
+ *                       description: Number of entries in current response
+ *                     total:
+ *                       type: number
+ *                       description: Total number of entries matching filters
+ *                     limit:
+ *                       type: number
+ *                       description: Limit used for this request
+ *                     offset:
+ *                       type: number
+ *                       description: Offset used for this request
+ *                     hasMore:
+ *                       type: boolean
+ *                       description: Whether there are more entries available
  *                     timestamp:
  *                       type: string
  *                       format: date-time
@@ -122,6 +127,14 @@ taxCalendarRouter.get(
     query('status').optional().isString().withMessage('Invalid status format'),
     query('jurisdiction').optional().isString().withMessage('Invalid jurisdiction format'),
     query('tax_type').optional().isString().withMessage('Invalid tax_type format'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 200 })
+      .withMessage('limit must be between 1 and 200'),
+    query('offset')
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage('offset must be a non-negative integer'),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
@@ -136,49 +149,24 @@ taxCalendarRouter.get(
 
     const supabase = getSupabase(req, token);
 
-    const { status, from, to, jurisdiction, tax_type } = req.query;
+    const { status, from, to, jurisdiction, tax_type, limit = '50', offset = '0' } = req.query;
 
-    let query = supabase
-      .from('tax_return_calendar_entries')
-      .select('*')
-      .eq('client_id', clientId);
+    const filters: taxCalendarService.TaxCalendarFilters = {
+      status: status as string | undefined,
+      from: from as string | undefined,
+      to: to as string | undefined,
+      jurisdiction: jurisdiction as string | undefined,
+      tax_type: tax_type as string | undefined,
+    };
 
-    if (status && typeof status === 'string') {
-      query = query.eq('status', status);
-    }
+    const pagination: taxCalendarService.PaginationOptions = {
+      limit: parseInt(limit as string, 10),
+      offset: parseInt(offset as string, 10),
+    };
 
-    if (jurisdiction && typeof jurisdiction === 'string') {
-      query = query.eq('jurisdiction', jurisdiction);
-    }
+    const result = await taxCalendarService.listEntries(supabase, clientId, filters, pagination);
 
-    if (tax_type && typeof tax_type === 'string') {
-      query = query.eq('tax_type', tax_type);
-    }
-
-    if (from && typeof from === 'string') {
-      query = query.gte('deadline', from);
-    }
-
-    if (to && typeof to === 'string') {
-      query = query.lte('deadline', to);
-    }
-
-    const { data, error } = await query.order('deadline', { ascending: true });
-
-    if (error) {
-      throw new AppError(
-        `Failed to fetch tax calendar entries: ${error.message}`,
-        500
-      );
-    }
-
-    res.json({
-      data,
-      meta: {
-        count: data?.length ?? 0,
-        timestamp: new Date().toISOString(),
-      },
-    });
+    res.json(result);
   })
 );
 
@@ -332,137 +320,23 @@ taxCalendarRouter.get(
       breakdown = 'true',
     } = req.query;
 
-    const dueSoonDaysNum = parseInt(dueSoonDays as string, 10);
-    const breakdownStr = String(breakdown);
-    const includeBreakdown = breakdownStr.toLowerCase() === 'true';
-
-    let query = supabase
-      .from('tax_return_calendar_entries')
-      .select('status, deadline, tax_type')
-      .eq('client_id', clientId);
-
-    if (status && typeof status === 'string') {
-      query = query.eq('status', status);
-    }
-
-    if (jurisdiction && typeof jurisdiction === 'string') {
-      query = query.eq('jurisdiction', jurisdiction);
-    }
-
-    if (tax_type && typeof tax_type === 'string') {
-      query = query.eq('tax_type', tax_type);
-    }
-
-    if (period_label && typeof period_label === 'string') {
-      query = query.eq('period_label', period_label);
-    }
-
-    if (from && typeof from === 'string') {
-      query = query.gte('deadline', from);
-    }
-
-    if (to && typeof to === 'string') {
-      query = query.lte('deadline', to);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new AppError(
-        `Failed to fetch tax calendar summary: ${error.message}`,
-        500
-      );
-    }
-
-    const today = isoDateInTZ(DEFAULT_TZ);
-    const dueSoonTo = isoDateInTZ(DEFAULT_TZ, addDays(new Date(), dueSoonDaysNum));
-
-    const summary = {
-      total: 0,
-      by_status: {
-        pending: 0,
-        in_progress: 0,
-        done: 0,
-        not_applicable: 0,
-      } as Record<string, number>,
-      overdue: 0,
-      due_soon: 0,
-      by_tax_type: {} as Record<string, any>,
+    const filters: taxCalendarService.TaxCalendarFilters = {
+      status: status as string | undefined,
+      from: from as string | undefined,
+      to: to as string | undefined,
+      jurisdiction: jurisdiction as string | undefined,
+      tax_type: tax_type as string | undefined,
+      period_label: period_label as string | undefined,
     };
 
-    (data || []).forEach((entry: any) => {
-      const entryStatus = entry.status?.toLowerCase() || '';
-      const deadline = entry.deadline;
-      const taxType = entry.tax_type || 'Unknown';
-
-      summary.total++;
-
-      if (summary.by_status[entryStatus] !== undefined) {
-        summary.by_status[entryStatus]++;
-      } else {
-        summary.by_status[entryStatus] = 1;
-      }
-
-      if (deadline < today && entryStatus !== 'done') {
-        summary.overdue++;
-      }
-
-      if (deadline >= today && deadline <= dueSoonTo && entryStatus !== 'done') {
-        summary.due_soon++;
-      }
-
-      if (includeBreakdown) {
-        if (!summary.by_tax_type[taxType]) {
-          summary.by_tax_type[taxType] = {
-            total: 0,
-            by_status: {
-              pending: 0,
-              in_progress: 0,
-              done: 0,
-              not_applicable: 0,
-            } as Record<string, number>,
-            overdue: 0,
-            due_soon: 0,
-          };
-        }
-
-        summary.by_tax_type[taxType].total++;
-
-        if (summary.by_tax_type[taxType].by_status[entryStatus] !== undefined) {
-          summary.by_tax_type[taxType].by_status[entryStatus]++;
-        } else {
-          summary.by_tax_type[taxType].by_status[entryStatus] = 1;
-        }
-
-        if (deadline < today && entryStatus !== 'done') {
-          summary.by_tax_type[taxType].overdue++;
-        }
-
-        if (deadline >= today && deadline <= dueSoonTo && entryStatus !== 'done') {
-          summary.by_tax_type[taxType].due_soon++;
-        }
-      }
-    });
-
-    const responseData: any = {
-      total: summary.total,
-      by_status: summary.by_status,
-      overdue: summary.overdue,
-      due_soon: summary.due_soon,
+    const options: taxCalendarService.SummaryOptions = {
+      dueSoonDays: parseInt(dueSoonDays as string, 10),
+      includeBreakdown: String(breakdown).toLowerCase() === 'true',
     };
 
-    if (includeBreakdown) {
-      responseData.by_tax_type = summary.by_tax_type;
-    }
+    const result = await taxCalendarService.getSummary(supabase, clientId, filters, options);
 
-    res.json({
-      data: responseData,
-      meta: {
-        today,
-        due_soon_to: dueSoonTo,
-        timestamp: new Date().toISOString(),
-      },
-    });
+    res.json(result);
   })
 );
 
@@ -598,59 +472,21 @@ taxCalendarRouter.get(
       status,
     } = req.query;
 
-    const monthsNum = parseInt(months as string, 10);
-    const limitNum = parseInt(limit as string, 10);
+    const filters: taxCalendarService.TaxCalendarFilters = {
+      status: status as string | undefined,
+      jurisdiction: jurisdiction as string | undefined,
+      tax_type: tax_type as string | undefined,
+      period_label: period_label as string | undefined,
+    };
 
-    const from = isoDateInTZ(DEFAULT_TZ);
-    const to = isoDateInTZ(DEFAULT_TZ, addMonths(new Date(), monthsNum));
+    const options: taxCalendarService.UpcomingOptions = {
+      months: parseInt(months as string, 10),
+      limit: parseInt(limit as string, 10),
+    };
 
-    let query = supabase
-      .from('tax_return_calendar_entries')
-      .select('*')
-      .eq('client_id', clientId)
-      .gte('deadline', from)
-      .lte('deadline', to);
+    const result = await taxCalendarService.getUpcoming(supabase, clientId, filters, options);
 
-    if (status && typeof status === 'string') {
-      query = query.eq('status', status);
-    } else {
-      query = query.neq('status', 'done');
-    }
-
-    if (jurisdiction && typeof jurisdiction === 'string') {
-      query = query.eq('jurisdiction', jurisdiction);
-    }
-
-    if (tax_type && typeof tax_type === 'string') {
-      query = query.eq('tax_type', tax_type);
-    }
-
-    if (period_label && typeof period_label === 'string') {
-      query = query.eq('period_label', period_label);
-    }
-
-    query = query.order('deadline', { ascending: true }).limit(limitNum);
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new AppError(
-        `Failed to fetch upcoming tax calendar entries: ${error.message}`,
-        500
-      );
-    }
-
-    res.json({
-      data,
-      meta: {
-        count: data?.length ?? 0,
-        range: {
-          from,
-          to,
-        },
-        timestamp: new Date().toISOString(),
-      },
-    });
+    res.json(result);
   })
 );
 
