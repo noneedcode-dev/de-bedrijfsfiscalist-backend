@@ -8,6 +8,11 @@ export function apiKeyMiddleware(
   res: Response,
   next: NextFunction
 ): void {
+  // Allowlist: /api/auth ve /api/auth/* endpoint'leri API key gerektirmez
+  if (req.path === '/auth' || req.path.startsWith('/auth/')) {
+    return next();
+  }
+
   const expected = env.auth.apiKey;
 
   // Dev ortamında APP_API_KEY tanımlı değilse kontrolü skip edebilirsin
