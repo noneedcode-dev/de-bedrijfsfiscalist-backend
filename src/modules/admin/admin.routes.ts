@@ -5,7 +5,7 @@ import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import { createSupabaseAdminClient } from '../../lib/supabaseClient';
 import { requireRole } from '../auth/auth.middleware';
-import { DbClient, DbAppUser, DbInvitation } from '../../types/database';
+import { DbClient, DbAppUser, DbInvitation, DbAppUserListItem } from '../../types/database';
 import { logger } from '../../config/logger';
 import { invitationService } from '../../services/invitationService';
 
@@ -318,23 +318,100 @@ adminRouter.post(
 );
 
 /**
- * GET /api/admin/users
- * Tüm kullanıcıları listele
- * Opsiyonel: clientId ile filtre
+ * @openapi
+ * /api/admin/users:
+ *   get:
+ *     summary: List all users
+ *     description: Retrieve a paginated list of all users with optional filters for role, client_id, and search.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [admin, client]
+ *         description: Filter users by role
+ *       - in: query
+ *         name: client_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter users by client ID
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search users by email or full name (case-insensitive)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 50
+ *         description: Number of users to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *         description: Number of users to skip
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AppUser'
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
  */
 adminRouter.get(
   '/users',
   [
-    query('clientId')
+    query('role')
+      .optional()
+      .isIn(['admin', 'client'])
+      .withMessage('Role must be either admin or client'),
+    query('client_id')
       .optional()
       .isUUID()
       .withMessage('Geçerli bir client UUID gerekli'),
+    query('search')
+      .optional()
+      .isString()
+      .trim(),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('offset').optional().isInt({ min: 0 }),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
-    const clientId = req.query.clientId as string | undefined;
+    const role = req.query.role as 'admin' | 'client' | undefined;
+    const clientId = req.query.client_id as string | undefined;
+    const search = req.query.search as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
 
@@ -342,11 +419,21 @@ adminRouter.get(
 
     let queryBuilder = supabase
       .from('app_users')
-      .select('*', { count: 'exact' })
+      .select('id, email, full_name, role, is_active, created_at, client_id', { count: 'exact' })
       .order('created_at', { ascending: false });
+
+    if (role) {
+      queryBuilder = queryBuilder.eq('role', role);
+    }
 
     if (clientId) {
       queryBuilder = queryBuilder.eq('client_id', clientId);
+    }
+
+    if (search) {
+      queryBuilder = queryBuilder.or(
+        `email.ilike.%${search}%,full_name.ilike.%${search}%`
+      );
     }
 
     const { data, error, count } = await queryBuilder
@@ -357,7 +444,7 @@ adminRouter.get(
     }
 
     return res.json({
-      data: (data ?? []) as DbAppUser[],
+      data: (data ?? []) as DbAppUserListItem[],
       meta: {
         count: count ?? data?.length ?? 0,
         limit,

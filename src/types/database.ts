@@ -90,3 +90,9 @@ export interface DbClientWithUsers extends DbClient {
   users_count: number;
 }
 
+/**
+ * User list item type
+ * Used in GET /api/admin/users response
+ */
+export type DbAppUserListItem = Pick<DbAppUser, 'id' | 'email' | 'full_name' | 'role' | 'is_active' | 'created_at' | 'client_id'>;
+
