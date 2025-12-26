@@ -83,6 +83,88 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
+        Client: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+            },
+            name: {
+              type: 'string',
+            },
+            slug: {
+              type: 'string',
+              nullable: true,
+            },
+            country: {
+              type: 'string',
+              nullable: true,
+            },
+            created_at: {
+              type: 'string',
+              format: 'date-time',
+            },
+            updated_at: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
+        AppUser: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+            },
+            full_name: {
+              type: 'string',
+              nullable: true,
+            },
+            role: {
+              type: 'string',
+              enum: ['admin', 'client'],
+            },
+            is_active: {
+              type: 'boolean',
+            },
+            created_at: {
+              type: 'string',
+              format: 'date-time',
+            },
+            client_id: {
+              type: 'string',
+              format: 'uuid',
+              nullable: true,
+            },
+          },
+        },
+        ClientWithUsers: {
+          allOf: [
+            {
+              $ref: '#/components/schemas/Client',
+            },
+            {
+              type: 'object',
+              properties: {
+                users: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/AppUser',
+                  },
+                },
+                users_count: {
+                  type: 'integer',
+                },
+              },
+            },
+          ],
+        },
         TaxCalendarEntry: {
           type: 'object',
           properties: {

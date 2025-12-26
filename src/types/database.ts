@@ -81,3 +81,12 @@ export interface DbCompany {
   updated_at: string;
 }
 
+/**
+ * Extended client type with related users
+ * Used when include_users=true in GET /api/admin/clients
+ */
+export interface DbClientWithUsers extends DbClient {
+  users: Pick<DbAppUser, 'id' | 'email' | 'full_name' | 'role' | 'is_active' | 'created_at' | 'client_id'>[];
+  users_count: number;
+}
+

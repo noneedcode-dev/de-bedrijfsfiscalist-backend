@@ -15,9 +15,72 @@ export const adminRouter = Router();
 adminRouter.use(requireRole('admin'));
 
 /**
- * GET /api/admin/clients
- * Tüm client'ları listele
- * Opsiyonel: search, limit, offset
+ * @openapi
+ * /api/admin/clients:
+ *   get:
+ *     summary: List all clients
+ *     description: Retrieve a paginated list of all clients. Optionally include related users.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search clients by name or slug
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 50
+ *         description: Number of clients to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *         description: Number of clients to skip
+ *       - in: query
+ *         name: include_users
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include related users for each client
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     oneOf:
+ *                       - $ref: '#/components/schemas/Client'
+ *                       - $ref: '#/components/schemas/ClientWithUsers'
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
  */
 adminRouter.get(
   '/clients',
@@ -25,12 +88,14 @@ adminRouter.get(
     query('search').optional().isString().trim(),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('offset').optional().isInt({ min: 0 }),
+    query('include_users').optional().isBoolean(),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
     const search = req.query.search as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+    const includeUsers = req.query.include_users === 'true';
 
     const supabase = createSupabaseAdminClient();
 
@@ -52,10 +117,55 @@ adminRouter.get(
       throw new AppError(`Client'lar getirilemedi: ${error.message}`, 500);
     }
 
+    const clients = (data ?? []) as DbClient[];
+
+    // If include_users is true, fetch related users
+    if (includeUsers && clients.length > 0) {
+      const clientIds = clients.map(c => c.id);
+
+      // Fetch all users for these clients
+      const { data: usersData, error: usersError } = await supabase
+        .from('app_users')
+        .select('id, email, full_name, role, is_active, created_at, client_id')
+        .in('client_id', clientIds);
+
+      if (usersError) {
+        throw new AppError(`Kullanıcılar getirilemedi: ${usersError.message}`, 500);
+      }
+
+      // Group users by client_id
+      const usersByClientId = new Map<string, DbAppUser[]>();
+      (usersData ?? []).forEach((user: any) => {
+        if (user.client_id) {
+          if (!usersByClientId.has(user.client_id)) {
+            usersByClientId.set(user.client_id, []);
+          }
+          usersByClientId.get(user.client_id)!.push(user as DbAppUser);
+        }
+      });
+
+      // Attach users array and users_count to each client
+      const clientsWithUsers = clients.map(client => ({
+        ...client,
+        users: usersByClientId.get(client.id) ?? [],
+        users_count: usersByClientId.get(client.id)?.length ?? 0,
+      }));
+
+      return res.json({
+        data: clientsWithUsers,
+        meta: {
+          count: count ?? clients.length,
+          limit,
+          offset,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
     return res.json({
-      data: (data ?? []) as DbClient[],
+      data: clients,
       meta: {
-        count: count ?? data?.length ?? 0,
+        count: count ?? clients.length,
         limit,
         offset,
         timestamp: new Date().toISOString(),
