@@ -127,14 +127,20 @@ export async function createRiskControl(
   const { data, error } = await supabase
     .from('tax_risk_control_rows')
     .insert(insertData)
-    .select('*')
+    .select('*, process:tax_function_rows(process_name)')
     .single();
 
   if (error) {
     throw new AppError(`Failed to create risk control: ${error.message}`, 500);
   }
 
-  return data;
+  const flattenedData = {
+    ...data,
+    process_name: data.process?.process_name ?? null,
+    process: undefined,
+  };
+
+  return flattenedData;
 }
 
 export interface RiskControlFilters {
@@ -163,7 +169,7 @@ export async function listRiskControls(
 
   let query = supabase
     .from('tax_risk_control_rows')
-    .select('*')
+    .select('*, process:tax_function_rows(process_name)')
     .eq('client_id', clientId);
 
   if (filters.process_id) {
@@ -203,8 +209,14 @@ export async function listRiskControls(
     throw new AppError(`Failed to list risk controls: ${error.message}`, 500);
   }
 
+  const flattenedData = (data || []).map((row: any) => ({
+    ...row,
+    process_name: row.process?.process_name ?? null,
+    process: undefined,
+  }));
+
   return {
-    data: data || [],
+    data: flattenedData,
     meta: {
       limit: pagination.limit,
       offset: pagination.offset,
@@ -220,7 +232,7 @@ export async function getRiskControlById(
 ) {
   const { data, error } = await supabase
     .from('tax_risk_control_rows')
-    .select('*')
+    .select('*, process:tax_function_rows(process_name)')
     .eq('id', id)
     .eq('client_id', clientId)
     .single();
@@ -232,7 +244,13 @@ export async function getRiskControlById(
     throw new AppError(`Failed to retrieve risk control: ${error.message}`, 500);
   }
 
-  return data;
+  const flattenedData = {
+    ...data,
+    process_name: data.process?.process_name ?? null,
+    process: undefined,
+  };
+
+  return flattenedData;
 }
 
 export interface UpdateRiskControlInput {
@@ -311,14 +329,20 @@ export async function updateRiskControl(
     .update(updateData)
     .eq('id', id)
     .eq('client_id', clientId)
-    .select('*')
+    .select('*, process:tax_function_rows(process_name)')
     .single();
 
   if (error) {
     throw new AppError(`Failed to update risk control: ${error.message}`, 500);
   }
 
-  return data;
+  const flattenedData = {
+    ...data,
+    process_name: data.process?.process_name ?? null,
+    process: undefined,
+  };
+
+  return flattenedData;
 }
 
 export async function deleteRiskControl(

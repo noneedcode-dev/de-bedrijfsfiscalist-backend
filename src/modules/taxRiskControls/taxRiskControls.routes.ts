@@ -74,6 +74,18 @@ function getSupabase(req: any, accessToken: string) {
  *     responses:
  *       200:
  *         description: Risk control created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     process_name:
+ *                       type: string
+ *                       nullable: true
+ *                       description: Process name from tax_function_rows
  *       400:
  *         description: Validation error
  *       401:
@@ -205,6 +217,29 @@ taxRiskControlsRouter.post(
  *     responses:
  *       200:
  *         description: List of risk controls with pagination metadata
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       process_name:
+ *                         type: string
+ *                         nullable: true
+ *                         description: Process name from tax_function_rows
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     count:
+ *                       type: integer
  *       400:
  *         description: Validation error
  *       401:
@@ -303,6 +338,18 @@ taxRiskControlsRouter.get(
  *     responses:
  *       200:
  *         description: Risk control details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     process_name:
+ *                       type: string
+ *                       nullable: true
+ *                       description: Process name from tax_function_rows
  *       404:
  *         description: Risk control not found
  *       401:
@@ -394,6 +441,18 @@ taxRiskControlsRouter.get(
  *     responses:
  *       200:
  *         description: Risk control updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     process_name:
+ *                       type: string
+ *                       nullable: true
+ *                       description: Process name from tax_function_rows
  *       404:
  *         description: Risk control not found
  *       400:
