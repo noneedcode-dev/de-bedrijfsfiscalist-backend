@@ -251,7 +251,7 @@ authRouter.post(
     // 3. app_users'dan user'ı bul
     const { data: appUser } = await supabase
       .from('app_users')
-      .select('id, email, role, client_id')
+      .select('id, email, role, client_id, full_name')
       .eq('email', invitation.email)
       .single();
 
@@ -320,7 +320,7 @@ authRouter.post(
         message: 'Davetiye kabul edildi. Artık giriş yapabilirsiniz.',
         email: invitation.email,
         client_id: invitation.client_id || null,
-        full_name: full_name || null,
+        full_name: full_name || appUser.full_name || null,
         role: invitation.role,
         clientName: invitation.clients?.name || null,
         invitation_id: invitation.id,
