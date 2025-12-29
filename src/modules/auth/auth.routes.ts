@@ -79,11 +79,111 @@ authRouter.get(
 );
 
 /**
- * POST /api/auth/accept-invite
- * Davetiyeyi kabul et ve şifre belirle
- * Public endpoint - Kullanıcı davetiye linkinden şifre belirler
- * 
- * NOT: Bu endpoint Supabase Auth'ın email confirm flow'u ile birlikte çalışır
+ * @swagger
+ * /api/auth/accept-invite:
+ *   post:
+ *     summary: Accept invitation and set password
+ *     description: Public endpoint for users to accept invitation, set password, and optionally provide full name. Returns comprehensive user data for Bubble integration.
+ *     tags:
+ *       - Authentication
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - password
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Invitation token from email link
+ *                 example: "a1b2c3d4e5f6..."
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *                 description: Password must contain at least 8 characters, one uppercase, one lowercase, and one number
+ *                 example: "SecurePass123"
+ *               full_name:
+ *                 type: string
+ *                 description: Optional full name of the user
+ *                 example: "John Doe"
+ *     responses:
+ *       200:
+ *         description: Invitation accepted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Davetiye kabul edildi. Artık giriş yapabilirsiniz."
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                       example: "user@example.com"
+ *                     client_id:
+ *                       type: string
+ *                       format: uuid
+ *                       nullable: true
+ *                       example: "123e4567-e89b-12d3-a456-426614174000"
+ *                     full_name:
+ *                       type: string
+ *                       nullable: true
+ *                       example: "John Doe"
+ *                     role:
+ *                       type: string
+ *                       enum: [admin, client]
+ *                       example: "client"
+ *                     clientName:
+ *                       type: string
+ *                       nullable: true
+ *                       example: "Acme Corporation"
+ *                     invitation_id:
+ *                       type: string
+ *                       format: uuid
+ *                       example: "987e6543-e21b-12d3-a456-426614174999"
+ *                     user_id:
+ *                       type: string
+ *                       format: uuid
+ *                       example: "456e7890-e12b-34d5-a678-901234567890"
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Bad request - invitation already accepted or invalid status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Invalid invitation token or user not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       410:
+ *         description: Invitation expired
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error - missing client_id or password update failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 authRouter.post(
   '/accept-invite',
@@ -99,21 +199,36 @@ authRouter.post(
       .withMessage('Şifre en az bir küçük harf içermelidir')
       .matches(/[0-9]/)
       .withMessage('Şifre en az bir rakam içermelidir'),
+    body('full_name').optional().isString().withMessage('full_name bir string olmalı'),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
-    const { token, password } = req.body;
+    const { token, password, full_name } = req.body;
     const supabase = createSupabaseAdminClient();
 
-    // 1. Davetiyeyi getir ve doğrula
+    // 1. Davetiyeyi getir ve doğrula (client bilgisiyle birlikte)
     const { data: invitation, error: inviteError } = await supabase
       .from('invitations')
-      .select('*')
+      .select(`
+        *,
+        clients (
+          name
+        )
+      `)
       .eq('token', token)
       .single();
 
     if (inviteError || !invitation) {
       throw new AppError('Geçersiz davetiye', 404);
+    }
+
+    // client_id kontrolü - invitation'da olmalı
+    if (!invitation.client_id && invitation.role === 'client') {
+      logger.error('Invitation missing client_id for client role', {
+        invitationId: invitation.id,
+        email: invitation.email,
+      });
+      throw new AppError('Davetiye bilgisi eksik. Lütfen destek ekibiyle iletişime geçin.', 500);
     }
 
     // 2. Validasyonlar
@@ -136,7 +251,7 @@ authRouter.post(
     // 3. app_users'dan user'ı bul
     const { data: appUser } = await supabase
       .from('app_users')
-      .select('id, email')
+      .select('id, email, role, client_id')
       .eq('email', invitation.email)
       .single();
 
@@ -144,12 +259,33 @@ authRouter.post(
       throw new AppError('Kullanıcı kaydı bulunamadı. Lütfen destek ekibiyle iletişime geçin.', 404);
     }
 
-    // 4. Supabase Auth'da şifre belirle ve email'i onayla
+    // 3b. app_users'ı güncelle - full_name varsa set et
+    if (full_name) {
+      const { error: updateAppUserError } = await supabase
+        .from('app_users')
+        .update({ full_name })
+        .eq('id', appUser.id);
+
+      if (updateAppUserError) {
+        logger.error('Failed to update app_users full_name', {
+          error: updateAppUserError,
+          userId: appUser.id,
+        });
+      }
+    }
+
+    // 4. Supabase Auth'da şifre belirle, email'i onayla ve user_metadata'yı güncelle
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       appUser.id,
       {
         password,
-        email_confirm: true, // Email'i otomatik onayla
+        email_confirm: true,
+        user_metadata: {
+          role: invitation.role,
+          client_id: invitation.client_id || null,
+          full_name: full_name || null,
+          invitation_id: invitation.id,
+        },
       }
     );
 
@@ -175,12 +311,20 @@ authRouter.post(
       userId: appUser.id,
       email: invitation.email,
       invitationId: invitation.id,
+      fullName: full_name,
     });
 
+    // 6. Bubble için kapsamlı response döndür
     return res.json({
       data: {
         message: 'Davetiye kabul edildi. Artık giriş yapabilirsiniz.',
         email: invitation.email,
+        client_id: invitation.client_id || null,
+        full_name: full_name || null,
+        role: invitation.role,
+        clientName: invitation.clients?.name || null,
+        invitation_id: invitation.id,
+        user_id: appUser.id,
       },
       meta: {
         timestamp: new Date().toISOString(),
