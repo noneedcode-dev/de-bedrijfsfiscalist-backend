@@ -4,6 +4,8 @@ import { param, query } from 'express-validator';
 import { createSupabaseUserClient } from '../../lib/supabaseClient';
 import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
+import { auditLogService } from '../../services/auditLogService';
+import { AuditActions } from '../../constants/auditActions';
 
 export const documentsRouter = Router({ mergeParams: true });
 
@@ -64,6 +66,8 @@ export const documentsRouter = Router({ mergeParams: true });
  *         $ref: '#/components/responses/ForbiddenError'
  *       429:
  *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 documentsRouter.get(
   '/',
@@ -104,6 +108,24 @@ documentsRouter.get(
     if (error) {
       throw new AppError(`Failed to fetch documents: ${error.message}`, 500);
     }
+
+    // Audit log (non-blocking)
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.DOCUMENTS_LIST_VIEWED,
+      entity_type: 'document',
+      metadata: {
+        query_params: {
+          source: source || null,
+          kind: kind || null,
+        },
+        result_count: data?.length ?? 0,
+        ip: req.ip,
+        user_agent: req.headers['user-agent'],
+      },
+    });
 
     res.json({
       data,

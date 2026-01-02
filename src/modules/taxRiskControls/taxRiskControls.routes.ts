@@ -87,9 +87,15 @@ function getSupabase(req: any, accessToken: string) {
  *                       nullable: true
  *                       description: Process name from tax_function_rows
  *       400:
- *         description: Validation error
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
- *         description: Unauthorized
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxRiskControlsRouter.post(
   '/',
@@ -241,9 +247,15 @@ taxRiskControlsRouter.post(
  *                     count:
  *                       type: integer
  *       400:
- *         description: Validation error
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
- *         description: Unauthorized
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxRiskControlsRouter.get(
   '/',
@@ -350,10 +362,18 @@ taxRiskControlsRouter.get(
  *                       type: string
  *                       nullable: true
  *                       description: Process name from tax_function_rows
- *       404:
- *         description: Risk control not found
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
- *         description: Unauthorized
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxRiskControlsRouter.get(
   '/:id',
@@ -453,12 +473,18 @@ taxRiskControlsRouter.get(
  *                       type: string
  *                       nullable: true
  *                       description: Process name from tax_function_rows
- *       404:
- *         description: Risk control not found
  *       400:
- *         description: Validation error
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
- *         description: Unauthorized
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxRiskControlsRouter.patch(
   '/:id',
@@ -547,10 +573,18 @@ taxRiskControlsRouter.patch(
  *     responses:
  *       204:
  *         description: Risk control deleted successfully
- *       404:
- *         description: Risk control not found
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
- *         description: Unauthorized
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxRiskControlsRouter.delete(
   '/:id',

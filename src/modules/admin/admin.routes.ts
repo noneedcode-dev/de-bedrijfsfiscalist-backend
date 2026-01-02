@@ -8,6 +8,9 @@ import { requireRole } from '../auth/auth.middleware';
 import { DbClient, DbAppUser, DbInvitation, DbAppUserListItem } from '../../types/database';
 import { logger } from '../../config/logger';
 import { invitationService } from '../../services/invitationService';
+import { auditLogService } from '../../services/auditLogService';
+import { provisioningService } from '../../services/provisioningService';
+import { AuditActions } from '../../constants/auditActions';
 
 export const adminRouter = Router();
 
@@ -77,10 +80,16 @@ adminRouter.use(requireRole('admin'));
  *                     timestamp:
  *                       type: string
  *                       format: date-time
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       403:
  *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 adminRouter.get(
   '/clients',
@@ -88,14 +97,14 @@ adminRouter.get(
     query('search').optional().isString().trim(),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('offset').optional().isInt({ min: 0 }),
-    query('include_users').optional().isBoolean(),
+    query('include_users').optional().isBoolean().toBoolean(),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
     const search = req.query.search as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
-    const includeUsers = req.query.include_users === 'true';
+    const includeUsers = (req.query.include_users as unknown as boolean) === true;
 
     const supabase = createSupabaseAdminClient();
 
@@ -119,8 +128,8 @@ adminRouter.get(
 
     const clients = (data ?? []) as DbClient[];
 
-    // If include_users is true, fetch related users
-    if (includeUsers && clients.length > 0) {
+    // Always fetch user counts for all clients
+    if (clients.length > 0) {
       const clientIds = clients.map(c => c.id);
 
       // Fetch all users for these clients
@@ -144,15 +153,33 @@ adminRouter.get(
         }
       });
 
-      // Attach users array and users_count to each client
-      const clientsWithUsers = clients.map(client => ({
+      // If include_users is true, attach users array and users_count
+      if (includeUsers) {
+        const clientsWithUsers = clients.map(client => ({
+          ...client,
+          users: usersByClientId.get(client.id) ?? [],
+          users_count: usersByClientId.get(client.id)?.length ?? 0,
+        }));
+
+        return res.json({
+          data: clientsWithUsers,
+          meta: {
+            count: count ?? clients.length,
+            limit,
+            offset,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+
+      // If include_users is false, only attach users_count
+      const clientsWithCount = clients.map(client => ({
         ...client,
-        users: usersByClientId.get(client.id) ?? [],
         users_count: usersByClientId.get(client.id)?.length ?? 0,
       }));
 
       return res.json({
-        data: clientsWithUsers,
+        data: clientsWithCount,
         meta: {
           count: count ?? clients.length,
           limit,
@@ -162,10 +189,11 @@ adminRouter.get(
       });
     }
 
+    // No clients found
     return res.json({
-      data: clients,
+      data: [],
       meta: {
-        count: count ?? clients.length,
+        count: count ?? 0,
         limit,
         offset,
         timestamp: new Date().toISOString(),
@@ -175,8 +203,51 @@ adminRouter.get(
 );
 
 /**
- * GET /api/admin/clients/:id
- * Tek bir client'ı detaylı göster
+ * @openapi
+ * /api/admin/clients/{id}:
+ *   get:
+ *     summary: Get a single client by ID
+ *     description: Retrieve detailed information for a specific client
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
+ *     responses:
+ *       200:
+ *         description: Client details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/Client'
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 adminRouter.get(
   '/clients/:id',
@@ -297,20 +368,76 @@ adminRouter.post(
       }
     }
 
-    // 3) Default TCF şablonlarını kopyala (şimdilik stub)
-    // TODO: provisionDefaultTcfTemplates(clientId)
-    // Şu an DB tarafında TCF tabloları hazır olduğunda buraya servis eklenecek.
+    // 3) Provision default templates for the new client
+    let provisioningResult;
+    try {
+      provisioningResult = await provisioningService.provisionDefaultTemplates(
+        supabase,
+        clientId
+      );
+      logger.info('Default templates provisioned for new client', {
+        clientId,
+        provisioningResult,
+      });
+    } catch (provisioningError: any) {
+      // Rollback: delete the client and any created user/invitation
+      logger.error('Provisioning failed, rolling back client creation', {
+        clientId,
+        error: provisioningError.message,
+      });
+
+      if (createdInvitation) {
+        await supabase.from('invitations').delete().eq('id', createdInvitation.id);
+      }
+      if (createdUser) {
+        await supabase.from('app_users').delete().eq('id', createdUser.id);
+      }
+      await supabase.from('clients').delete().eq('id', clientId);
+
+      throw new AppError(
+        `Client oluşturuldu ancak şablon verileri yüklenemedi. İşlem geri alındı: ${provisioningError.message}`,
+        500
+      );
+    }
+
+    // 4) Audit log (non-blocking)
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.CLIENT_CREATED,
+      entity_type: 'client',
+      entity_id: clientId,
+      metadata: {
+        client_name: client.name,
+        client_slug: client.slug,
+        first_user_invited: !!createdUser,
+        first_user_email: createdUser?.email,
+        provisioning: {
+          tax_calendar_count: provisioningResult.taxCalendarCount,
+          risk_matrix_count: provisioningResult.riskMatrixCount,
+          risk_control_count: provisioningResult.riskControlCount,
+          tax_function_count: provisioningResult.taxFunctionCount,
+        },
+      },
+    });
 
     return res.status(201).json({
       data: {
         client: client as DbClient,
         firstUser: createdUser,
         invitation: createdInvitation,
+        provisioning: {
+          tax_calendar_count: provisioningResult.taxCalendarCount,
+          risk_matrix_count: provisioningResult.riskMatrixCount,
+          risk_control_count: provisioningResult.riskControlCount,
+          tax_function_count: provisioningResult.taxFunctionCount,
+        },
       },
       meta: {
         message: createdUser 
-          ? 'Client oluşturuldu ve ilk kullanıcıya davetiye emaili gönderildi.'
-          : 'Client oluşturuldu.',
+          ? 'Client oluşturuldu, şablon verileri yüklendi ve ilk kullanıcıya davetiye emaili gönderildi.'
+          : 'Client oluşturuldu ve şablon verileri yüklendi.',
         timestamp: new Date().toISOString(),
       },
     });
@@ -384,10 +511,16 @@ adminRouter.post(
  *                     timestamp:
  *                       type: string
  *                       format: date-time
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  *       403:
  *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 adminRouter.get(
   '/users',
@@ -409,11 +542,20 @@ adminRouter.get(
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
+    const requestId = req.id || 'unknown';
     const role = req.query.role as 'admin' | 'client' | undefined;
     const clientId = req.query.client_id as string | undefined;
     const search = req.query.search as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+
+    logger.info('GET /api/admin/users - Request received', {
+      request_id: requestId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      filters: { role, client_id: clientId, search: search ? '[redacted]' : undefined },
+      pagination: { limit, offset },
+    });
 
     const supabase = createSupabaseAdminClient();
 
@@ -440,8 +582,21 @@ adminRouter.get(
       .range(offset, offset + limit - 1);
 
     if (error) {
+      logger.error('GET /api/admin/users - Supabase query failed', {
+        request_id: requestId,
+        error: error.message,
+        error_code: error.code,
+        filters: { role, client_id: clientId },
+      });
       throw new AppError(`Kullanıcılar getirilemedi: ${error.message}`, 500);
     }
+
+    logger.info('GET /api/admin/users - Success', {
+      request_id: requestId,
+      results_count: data?.length ?? 0,
+      total_count: count ?? 0,
+      filters: { role, client_id: clientId },
+    });
 
     return res.json({
       data: (data ?? []) as DbAppUserListItem[],
@@ -497,6 +652,21 @@ adminRouter.post(
       full_name: full_name ?? null,
       invited_by: req.user?.sub,
       clientName,
+    });
+
+    // Audit log (non-blocking)
+    auditLogService.logAsync({
+      client_id: role === 'client' ? client_id : undefined,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.USER_INVITED,
+      entity_type: 'user',
+      entity_id: result.user.id,
+      metadata: {
+        invited_email: email,
+        invited_role: role,
+        invitation_id: result.invitation.id,
+      },
     });
 
     return res.status(201).json({
@@ -577,6 +747,21 @@ adminRouter.post(
       adminId: req.user?.sub,
     });
 
+    // Audit log (non-blocking)
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.COMPANY_UPSERTED,
+      entity_type: 'company',
+      entity_id: company.id,
+      metadata: {
+        company_name: company.name,
+        company_kvk: company.kvk,
+        company_vat: company.vat,
+      },
+    });
+
     return res.json({
       data: {
         company,
@@ -621,6 +806,191 @@ adminRouter.get(
         message: 'Company getirildi.',
         timestamp: new Date().toISOString(),
       },
+    });
+  })
+);
+
+/**
+ * @openapi
+ * /api/admin/audit-logs:
+ *   get:
+ *     summary: List audit logs with filters
+ *     description: Retrieve a paginated list of audit logs with optional filters for client_id, action, and date range. Admin only.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: client_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter by client ID
+ *       - in: query
+ *         name: action
+ *         schema:
+ *           type: string
+ *         description: Filter by action type (e.g., DOCUMENTS_LIST_VIEWED, CLIENT_CREATED)
+ *       - in: query
+ *         name: from
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter logs from this date (ISO 8601 format)
+ *       - in: query
+ *         name: to
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter logs until this date (ISO 8601 format)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 50
+ *         description: Number of logs to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *         description: Number of logs to skip
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
+ *                       client_id:
+ *                         type: string
+ *                         format: uuid
+ *                       actor_user_id:
+ *                         type: string
+ *                         format: uuid
+ *                       actor_role:
+ *                         type: string
+ *                       action:
+ *                         type: string
+ *                       entity_type:
+ *                         type: string
+ *                       entity_id:
+ *                         type: string
+ *                         format: uuid
+ *                       metadata:
+ *                         type: object
+ *                 count:
+ *                   type: integer
+ *                   description: Total number of matching records
+ *                 limit:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+adminRouter.get(
+  '/audit-logs',
+  [
+    query('client_id')
+      .optional()
+      .isUUID()
+      .withMessage('client_id must be a valid UUID'),
+    query('action')
+      .optional()
+      .isString()
+      .trim()
+      .notEmpty()
+      .withMessage('action must be a non-empty string'),
+    query('from')
+      .optional()
+      .isISO8601()
+      .withMessage('from must be a valid ISO 8601 date'),
+    query('to')
+      .optional()
+      .isISO8601()
+      .withMessage('to must be a valid ISO 8601 date'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage('limit must be between 1 and 100'),
+    query('offset')
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage('offset must be a non-negative integer'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.query.client_id as string | undefined;
+    const action = req.query.action as string | undefined;
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+
+    const supabase = createSupabaseAdminClient();
+
+    let queryBuilder = supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (clientId) {
+      queryBuilder = queryBuilder.eq('client_id', clientId);
+    }
+
+    if (action) {
+      queryBuilder = queryBuilder.eq('action', action);
+    }
+
+    if (from) {
+      queryBuilder = queryBuilder.gte('created_at', from);
+    }
+
+    if (to) {
+      queryBuilder = queryBuilder.lte('created_at', to);
+    }
+
+    const { data, error, count } = await queryBuilder
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      logger.error('Failed to fetch audit logs', {
+        error: error.message,
+        filters: { clientId, action, from, to },
+      });
+      throw new AppError(`Audit logs getirilemedi: ${error.message}`, 500);
+    }
+
+    return res.json({
+      results: data ?? [],
+      count: count ?? 0,
+      limit,
+      offset,
     });
   })
 );

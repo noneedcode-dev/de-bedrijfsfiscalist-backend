@@ -5,6 +5,8 @@ import { createSupabaseAdminClient, createSupabaseUserClient } from '../../lib/s
 import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import * as taxCalendarService from './taxCalendar.service';
+import { auditLogService } from '../../services/auditLogService';
+import { AuditActions } from '../../constants/auditActions';
 
 export const taxCalendarRouter = Router({ mergeParams: true });
 
@@ -117,6 +119,8 @@ function getSupabase(req: any, accessToken: string) {
  *         $ref: '#/components/responses/ForbiddenError'
  *       429:
  *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxCalendarRouter.get(
   '/',
@@ -165,6 +169,24 @@ taxCalendarRouter.get(
     };
 
     const result = await taxCalendarService.listEntries(supabase, clientId, filters, pagination);
+
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.TAX_CALENDAR_VIEWED,
+      entity_type: 'tax_calendar',
+      entity_id: clientId,
+      metadata: {
+        from: filters.from,
+        to: filters.to,
+        status: filters.status,
+        jurisdiction: filters.jurisdiction,
+        tax_type: filters.tax_type,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      },
+    });
 
     res.json(result);
   })
@@ -276,6 +298,8 @@ taxCalendarRouter.get(
  *         $ref: '#/components/responses/ForbiddenError'
  *       429:
  *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxCalendarRouter.get(
   '/summary',
@@ -335,6 +359,25 @@ taxCalendarRouter.get(
     };
 
     const result = await taxCalendarService.getSummary(supabase, clientId, filters, options);
+
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.TAX_CALENDAR_SUMMARY_VIEWED,
+      entity_type: 'tax_calendar',
+      entity_id: clientId,
+      metadata: {
+        from: filters.from,
+        to: filters.to,
+        status: filters.status,
+        jurisdiction: filters.jurisdiction,
+        tax_type: filters.tax_type,
+        period_label: filters.period_label,
+        dueSoonDays: options.dueSoonDays,
+        includeBreakdown: options.includeBreakdown,
+      },
+    });
 
     res.json(result);
   })
@@ -432,6 +475,8 @@ taxCalendarRouter.get(
  *         $ref: '#/components/responses/ForbiddenError'
  *       429:
  *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 taxCalendarRouter.get(
   '/upcoming',
@@ -485,6 +530,23 @@ taxCalendarRouter.get(
     };
 
     const result = await taxCalendarService.getUpcoming(supabase, clientId, filters, options);
+
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.TAX_CALENDAR_UPCOMING_VIEWED,
+      entity_type: 'tax_calendar',
+      entity_id: clientId,
+      metadata: {
+        status: filters.status,
+        jurisdiction: filters.jurisdiction,
+        tax_type: filters.tax_type,
+        period_label: filters.period_label,
+        months: options.months,
+        limit: options.limit,
+      },
+    });
 
     res.json(result);
   })
