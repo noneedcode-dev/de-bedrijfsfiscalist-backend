@@ -2,8 +2,10 @@
 export interface AuthUser {
   sub: string;
   role: 'admin' | 'client';
-  client_id?: string;
-  accessToken?: string; // JWT token for user-scoped Supabase client
+  client_id: string;
+  permissions?: string[];
+  scopes?: string[];
+  accessToken?: string;
 }
 
 declare global {

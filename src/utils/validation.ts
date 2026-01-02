@@ -2,6 +2,7 @@
 import { validationResult } from 'express-validator';
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../middleware/errorHandler';
+import { ErrorCodes } from '../constants/errorCodes';
 
 export function handleValidationErrors(
   req: Request,
@@ -11,7 +12,16 @@ export function handleValidationErrors(
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const messages = errors.array().map(err => err.msg).join(', ');
-    throw new AppError(`Validation failed: ${messages}`, 400);
+    const details = errors.array().map(err => ({
+      field: err.type === 'field' ? (err as any).path : err.type,
+      message: err.msg,
+    }));
+    throw new AppError(
+      `Validation failed: ${messages}`,
+      422,
+      ErrorCodes.VALIDATION_FAILED,
+      details
+    );
   }
   next();
 }

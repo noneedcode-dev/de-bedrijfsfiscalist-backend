@@ -6,6 +6,7 @@ import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import { auditLogService } from '../../services/auditLogService';
 import { AuditActions } from '../../constants/auditActions';
+import { ErrorCodes } from '../../constants/errorCodes';
 
 export const documentsRouter = Router({ mergeParams: true });
 
@@ -19,7 +20,7 @@ export const documentsRouter = Router({ mergeParams: true });
  *       - Documents
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -58,7 +59,7 @@ export const documentsRouter = Router({ mergeParams: true });
  *                     timestamp:
  *                       type: string
  *                       format: date-time
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -84,7 +85,7 @@ documentsRouter.get(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = createSupabaseUserClient(token);

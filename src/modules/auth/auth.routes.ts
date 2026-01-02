@@ -5,6 +5,7 @@ import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import { createSupabaseAdminClient } from '../../lib/supabaseClient';
 import { logger } from '../../config/logger';
+import { ErrorCodes } from '../../constants/errorCodes';
 
 export const authRouter = Router();
 
@@ -34,7 +35,7 @@ authRouter.get(
       .single();
 
     if (error || !invitation) {
-      throw new AppError('Geçersiz veya bulunamayan davetiye linki', 404);
+      throw AppError.fromCode(ErrorCodes.INVITE_INVALID_TOKEN, 404);
     }
 
     // Expired check
@@ -50,17 +51,17 @@ authRouter.get(
           .eq('id', invitation.id);
       }
       
-      throw new AppError('Davetiye süresi dolmuş', 410);
+      throw AppError.fromCode(ErrorCodes.INVITE_EXPIRED, 410);
     }
 
     // Already accepted check
     if (invitation.status === 'accepted') {
-      throw new AppError('Bu davetiye zaten kabul edilmiş. Giriş yapabilirsiniz.', 400);
+      throw AppError.fromCode(ErrorCodes.INVITE_ALREADY_ACCEPTED, 400);
     }
 
     // Cancelled check
     if (invitation.status === 'cancelled') {
-      throw new AppError('Bu davetiye iptal edilmiş', 400);
+      throw AppError.fromCode(ErrorCodes.INVITE_CANCELLED, 400);
     }
 
     // Return safe invitation data for UI
@@ -219,7 +220,7 @@ authRouter.post(
       .single();
 
     if (inviteError || !invitation) {
-      throw new AppError('Geçersiz davetiye', 404);
+      throw AppError.fromCode(ErrorCodes.INVITE_INVALID_TOKEN, 404);
     }
 
     // client_id kontrolü - invitation'da olmalı
@@ -228,7 +229,9 @@ authRouter.post(
         invitationId: invitation.id,
         email: invitation.email,
       });
-      throw new AppError('Davetiye bilgisi eksik. Lütfen destek ekibiyle iletişime geçin.', 500);
+      throw AppError.fromCode(ErrorCodes.INVITE_CREATE_FAILED, 500, {
+        reason: 'Missing client_id for client role invitation',
+      });
     }
 
     // 2. Validasyonlar
@@ -237,15 +240,15 @@ authRouter.post(
         .from('invitations')
         .update({ status: 'expired', updated_at: new Date().toISOString() })
         .eq('id', invitation.id);
-      throw new AppError('Davetiye süresi dolmuş', 410);
+      throw AppError.fromCode(ErrorCodes.INVITE_EXPIRED, 410);
     }
 
     if (invitation.status === 'accepted') {
-      throw new AppError('Bu davetiye zaten kabul edilmiş. Giriş yapabilirsiniz.', 400);
+      throw AppError.fromCode(ErrorCodes.INVITE_ALREADY_ACCEPTED, 400);
     }
 
     if (invitation.status !== 'pending') {
-      throw new AppError('Bu davetiye artık geçerli değil', 400);
+      throw AppError.fromCode(ErrorCodes.INVITE_CANCELLED, 400);
     }
 
     // 3. app_users'dan user'ı bul
@@ -256,7 +259,7 @@ authRouter.post(
       .single();
 
     if (!appUser) {
-      throw new AppError('Kullanıcı kaydı bulunamadı. Lütfen destek ekibiyle iletişime geçin.', 404);
+      throw AppError.fromCode(ErrorCodes.AUTH_USER_NOT_FOUND, 404);
     }
 
     // 3b. app_users'ı güncelle - full_name varsa set et
@@ -295,7 +298,10 @@ authRouter.post(
         userId: appUser.id,
         email: invitation.email,
       });
-      throw new AppError(`Şifre belirlenemedi: ${updateError.message}`, 500);
+      throw AppError.fromCode(ErrorCodes.USER_UPDATE_FAILED, 500, {
+        reason: 'Failed to set password',
+        error: updateError.message,
+      });
     }
 
     // 5. Davetiyeyi accepted yap

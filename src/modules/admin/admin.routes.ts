@@ -80,7 +80,7 @@ adminRouter.use(requireRole('admin'));
  *                     timestamp:
  *                       type: string
  *                       format: date-time
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -236,7 +236,7 @@ adminRouter.get(
  *                     timestamp:
  *                       type: string
  *                       format: date-time
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -511,7 +511,7 @@ adminRouter.post(
  *                     timestamp:
  *                       type: string
  *                       format: date-time
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -902,7 +902,7 @@ adminRouter.get(
  *                   type: integer
  *                 offset:
  *                   type: integer
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'

@@ -261,76 +261,147 @@ export async function provisionDefaultTemplates(
   try {
     logger.info('Starting default template provisioning', { clientId });
 
+    // Tax Calendar: Check existing entries and insert only missing ones
     const taxCalendarTemplates = getDefaultTaxCalendarTemplates(clientId);
-    const { data: taxCalendarData, error: taxCalendarError } = await supabase
+    const { data: existingTaxCalendar } = await supabase
       .from('tax_return_calendar_entries')
-      .insert(taxCalendarTemplates)
-      .select('id');
+      .select('jurisdiction, tax_type, period_label, deadline')
+      .eq('client_id', clientId);
 
-    if (taxCalendarError) {
-      throw new AppError(
-        `Failed to provision tax calendar templates: ${taxCalendarError.message}`,
-        500
-      );
+    const existingTaxCalendarKeys = new Set(
+      (existingTaxCalendar || []).map(
+        (e: any) => `${e.jurisdiction}|${e.tax_type}|${e.period_label}|${e.deadline}`
+      )
+    );
+
+    const newTaxCalendarTemplates = taxCalendarTemplates.filter((template) => {
+      const key = `${template.jurisdiction}|${template.tax_type}|${template.period_label}|${template.deadline}`;
+      return !existingTaxCalendarKeys.has(key);
+    });
+
+    if (newTaxCalendarTemplates.length > 0) {
+      const { data: taxCalendarData, error: taxCalendarError } = await supabase
+        .from('tax_return_calendar_entries')
+        .insert(newTaxCalendarTemplates)
+        .select('id');
+
+      if (taxCalendarError) {
+        throw new AppError(
+          `Failed to provision tax calendar templates: ${taxCalendarError.message}`,
+          500
+        );
+      }
+      result.taxCalendarCount = taxCalendarData?.length ?? 0;
     }
-    result.taxCalendarCount = taxCalendarData?.length ?? 0;
     logger.info('Tax calendar templates provisioned', {
       clientId,
       count: result.taxCalendarCount,
+      skipped: taxCalendarTemplates.length - newTaxCalendarTemplates.length,
     });
 
+    // Risk Matrix: Check existing entries and insert only missing ones
     const riskMatrixTemplates = getDefaultRiskMatrixTemplates(clientId);
-    const { data: riskMatrixData, error: riskMatrixError } = await supabase
+    const { data: existingRiskMatrix } = await supabase
       .from('tax_risk_matrix_entries')
-      .insert(riskMatrixTemplates)
-      .select('id');
+      .select('risk_code')
+      .eq('client_id', clientId);
 
-    if (riskMatrixError) {
-      throw new AppError(
-        `Failed to provision risk matrix templates: ${riskMatrixError.message}`,
-        500
-      );
+    const existingRiskMatrixCodes = new Set(
+      (existingRiskMatrix || []).map((e: any) => e.risk_code)
+    );
+
+    const newRiskMatrixTemplates = riskMatrixTemplates.filter(
+      (template) => !existingRiskMatrixCodes.has(template.risk_code)
+    );
+
+    if (newRiskMatrixTemplates.length > 0) {
+      const { data: riskMatrixData, error: riskMatrixError } = await supabase
+        .from('tax_risk_matrix_entries')
+        .insert(newRiskMatrixTemplates)
+        .select('id');
+
+      if (riskMatrixError) {
+        throw new AppError(
+          `Failed to provision risk matrix templates: ${riskMatrixError.message}`,
+          500
+        );
+      }
+      result.riskMatrixCount = riskMatrixData?.length ?? 0;
     }
-    result.riskMatrixCount = riskMatrixData?.length ?? 0;
     logger.info('Risk matrix templates provisioned', {
       clientId,
       count: result.riskMatrixCount,
+      skipped: riskMatrixTemplates.length - newRiskMatrixTemplates.length,
     });
 
+    // Risk Control: Check existing entries and insert only missing ones
     const riskControlTemplates = getDefaultRiskControlTemplates(clientId);
-    const { data: riskControlData, error: riskControlError } = await supabase
+    const { data: existingRiskControl } = await supabase
       .from('tax_risk_control_rows')
-      .insert(riskControlTemplates)
-      .select('id');
+      .select('risk_code')
+      .eq('client_id', clientId);
 
-    if (riskControlError) {
-      throw new AppError(
-        `Failed to provision risk control templates: ${riskControlError.message}`,
-        500
-      );
+    const existingRiskControlCodes = new Set(
+      (existingRiskControl || []).map((e: any) => e.risk_code)
+    );
+
+    const newRiskControlTemplates = riskControlTemplates.filter(
+      (template) => !existingRiskControlCodes.has(template.risk_code)
+    );
+
+    if (newRiskControlTemplates.length > 0) {
+      const { data: riskControlData, error: riskControlError } = await supabase
+        .from('tax_risk_control_rows')
+        .insert(newRiskControlTemplates)
+        .select('id');
+
+      if (riskControlError) {
+        throw new AppError(
+          `Failed to provision risk control templates: ${riskControlError.message}`,
+          500
+        );
+      }
+      result.riskControlCount = riskControlData?.length ?? 0;
     }
-    result.riskControlCount = riskControlData?.length ?? 0;
     logger.info('Risk control templates provisioned', {
       clientId,
       count: result.riskControlCount,
+      skipped: riskControlTemplates.length - newRiskControlTemplates.length,
     });
 
+    // Tax Function: Check existing entries and insert only missing ones
     const taxFunctionTemplates = getDefaultTaxFunctionTemplates(clientId);
-    const { data: taxFunctionData, error: taxFunctionError } = await supabase
+    const { data: existingTaxFunction } = await supabase
       .from('tax_function_rows')
-      .insert(taxFunctionTemplates)
-      .select('id');
+      .select('process_name')
+      .eq('client_id', clientId);
 
-    if (taxFunctionError) {
-      throw new AppError(
-        `Failed to provision tax function templates: ${taxFunctionError.message}`,
-        500
-      );
+    const existingProcessNames = new Set(
+      (existingTaxFunction || []).map((e: any) => e.process_name)
+    );
+
+    const newTaxFunctionTemplates = taxFunctionTemplates.filter(
+      (template) => !existingProcessNames.has(template.process_name)
+    );
+
+    if (newTaxFunctionTemplates.length > 0) {
+      const { data: taxFunctionData, error: taxFunctionError } = await supabase
+        .from('tax_function_rows')
+        .insert(newTaxFunctionTemplates)
+        .select('id');
+
+      if (taxFunctionError) {
+        throw new AppError(
+          `Failed to provision tax function templates: ${taxFunctionError.message}`,
+          500
+        );
+      }
+      result.taxFunctionCount = taxFunctionData?.length ?? 0;
     }
-    result.taxFunctionCount = taxFunctionData?.length ?? 0;
     logger.info('Tax function templates provisioned', {
       clientId,
       count: result.taxFunctionCount,
+      skipped: taxFunctionTemplates.length - newTaxFunctionTemplates.length,
     });
 
     result.success = true;

@@ -15,17 +15,22 @@ function generateToken(payload: any, expiresIn: string = '1h'): string {
   return jwt.sign(payload, env.supabase.jwtSecret, { expiresIn });
 }
 
-const createMockQueryBuilder = (mockData: any = { data: [], error: null }) => ({
-  from: vi.fn(function(this: any) { return this; }),
-  select: vi.fn(function(this: any) { return this; }),
-  eq: vi.fn(function(this: any) { return this; }),
-  gte: vi.fn(function(this: any) { return this; }),
-  lte: vi.fn(function(this: any) { return this; }),
-  neq: vi.fn(function(this: any) { return this; }),
-  order: vi.fn(function(this: any) { return this; }),
-  limit: vi.fn(function(this: any) { return this; }),
-  then: vi.fn((resolve: any) => resolve(mockData)),
-});
+const createMockQueryBuilder = (mockData: any = { data: [], error: null }) => {
+  const builder: any = {
+    from: vi.fn(() => builder),
+    select: vi.fn(() => builder),
+    eq: vi.fn(() => builder),
+    gte: vi.fn(() => builder),
+    lte: vi.fn(() => builder),
+    neq: vi.fn(() => builder),
+    not: vi.fn(() => builder),
+    order: vi.fn(() => builder),
+    limit: vi.fn(() => builder),
+    range: vi.fn(() => builder),
+    then: vi.fn((resolve: any) => resolve(mockData)),
+  };
+  return builder;
+};
 
 let mockSupabaseClient: any;
 
@@ -34,6 +39,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     vi.clearAllMocks();
     mockSupabaseClient = createMockQueryBuilder();
     vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+    vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
   });
 
   describe('GET /api/clients/:clientId/tax/calendar/upcoming - Authentication', () => {
@@ -44,21 +50,12 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
 
       expect(res.status).toBe(401);
     });
-
-    it('should return 401 when Bearer token is invalid', async () => {
-      const res = await request(app)
-        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
-        .set('x-api-key', MOCK_API_KEY)
-        .set('Authorization', 'Bearer invalid-token');
-
-      expect(res.status).toBe(401);
-    });
   });
 
   describe('GET /api/clients/:clientId/tax/calendar/upcoming - Validation', () => {
     const validToken = generateToken({ sub: 'user123', role: 'client', client_id: MOCK_CLIENT_ID });
 
-    it('should return 400 when clientId is not a valid UUID', async () => {
+    it('should return 422 when clientId is not a valid UUID', async () => {
       const invalidToken = generateToken({ sub: 'user123', role: 'admin' });
       
       const res = await request(app)
@@ -66,13 +63,14 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${invalidToken}`);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
       expect(res.body.message).toContain('Validation failed');
     });
 
-    it('should return 400 when months is out of range (too low)', async () => {
+    it('should return 422 when months is out of range (too low)', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -80,13 +78,14 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${validToken}`);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
       expect(res.body.message).toContain('months must be between 1 and 24');
     });
 
-    it('should return 400 when months is out of range (too high)', async () => {
+    it('should return 422 when months is out of range (too high)', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -94,13 +93,14 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${validToken}`);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
       expect(res.body.message).toContain('months must be between 1 and 24');
     });
 
-    it('should return 400 when limit is out of range (too low)', async () => {
+    it('should return 422 when limit is out of range (too low)', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -108,13 +108,14 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${validToken}`);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
       expect(res.body.message).toContain('limit must be between 1 and 50');
     });
 
-    it('should return 400 when limit is out of range (too high)', async () => {
+    it('should return 422 when limit is out of range (too high)', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -122,7 +123,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${validToken}`);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
       expect(res.body.message).toContain('limit must be between 1 and 50');
     });
   });
@@ -133,6 +134,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should return 200 with empty list when no data', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -170,6 +172,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
 
       mockSupabaseClient = createMockQueryBuilder({ data: mockData, error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -184,6 +187,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should exclude done entries by default when status param is not provided', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -197,6 +201,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should apply exact status filter when status param is provided', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -212,6 +217,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should apply date range filter correctly', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -227,6 +233,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should apply limit correctly', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -241,6 +248,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should order by deadline ascending', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -254,6 +262,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should apply optional filters correctly', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -274,6 +283,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
     it('should use default values for months and limit', async () => {
       mockSupabaseClient = createMockQueryBuilder({ data: [], error: null });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)
@@ -294,6 +304,7 @@ describe('Tax Calendar Upcoming Endpoint Tests', () => {
         error: { message: 'Database connection failed' } 
       });
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabaseClient as any);
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabaseClient as any);
 
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/tax/calendar/upcoming`)

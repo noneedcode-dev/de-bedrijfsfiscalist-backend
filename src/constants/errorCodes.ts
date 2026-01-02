@@ -9,6 +9,7 @@ export const ErrorCodes = {
   AUTH_MISSING_HEADER: 'AUTH_MISSING_HEADER',
   AUTH_INVALID_FORMAT: 'AUTH_INVALID_FORMAT',
   AUTH_INVALID_TOKEN: 'AUTH_INVALID_TOKEN',
+  AUTH_INVALID_CLAIMS: 'AUTH_INVALID_CLAIMS',
   AUTH_EXPIRED_TOKEN: 'AUTH_EXPIRED_TOKEN',
   AUTH_USER_NOT_FOUND: 'AUTH_USER_NOT_FOUND',
   AUTH_INSUFFICIENT_PERMISSIONS: 'AUTH_INSUFFICIENT_PERMISSIONS',
@@ -66,6 +67,7 @@ export const ErrorCodes = {
   BAD_REQUEST: 'BAD_REQUEST',
   FORBIDDEN: 'FORBIDDEN',
   UNAUTHORIZED: 'UNAUTHORIZED',
+  CONFLICT: 'CONFLICT',
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
@@ -79,6 +81,7 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   AUTH_MISSING_HEADER: 'Authorization header is missing',
   AUTH_INVALID_FORMAT: 'Invalid authorization header format',
   AUTH_INVALID_TOKEN: 'Invalid or expired token',
+  AUTH_INVALID_CLAIMS: 'Token is missing required claims',
   AUTH_EXPIRED_TOKEN: 'Token has expired',
   AUTH_USER_NOT_FOUND: 'User not found',
   AUTH_INSUFFICIENT_PERMISSIONS: 'Insufficient permissions',
@@ -136,4 +139,5 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   BAD_REQUEST: 'Bad request',
   FORBIDDEN: 'Forbidden',
   UNAUTHORIZED: 'Unauthorized',
+  CONFLICT: 'Resource conflict or constraint violation',
 };

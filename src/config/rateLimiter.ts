@@ -1,7 +1,7 @@
 // src/config/rateLimiter.ts
 import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
-import { sendError } from '../utils/sendError';
+import { ErrorCodes } from '../constants/errorCodes';
 import { env } from './env';
 
 const standardHeaders = true;
@@ -17,8 +17,15 @@ const isDevelopment = env.nodeEnv === 'development';
 export const healthLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 dakika
   max: isDevelopment ? 300 : 60, // IP başına max request
-  handler: (_req: Request, res: Response) => {
-    sendError(res, 'Health check rate limit exceeded', 429);
+  handler: (req: Request, res: Response) => {
+    const requestId = req.id || 'unknown';
+    res.setHeader('X-Request-ID', requestId);
+    res.status(429).json({
+      code: ErrorCodes.RATE_LIMIT_EXCEEDED,
+      message: 'Health check rate limit exceeded',
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+    });
   },
   standardHeaders,
   legacyHeaders,
@@ -32,8 +39,15 @@ export const healthLimiter = rateLimit({
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 dakika
   max: isDevelopment ? 1000 : 100, // IP başına max request
-  handler: (_req: Request, res: Response) => {
-    sendError(res, 'API rate limit exceeded, please try again later', 429);
+  handler: (req: Request, res: Response) => {
+    const requestId = req.id || 'unknown';
+    res.setHeader('X-Request-ID', requestId);
+    res.status(429).json({
+      code: ErrorCodes.RATE_LIMIT_EXCEEDED,
+      message: 'API rate limit exceeded, please try again later',
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+    });
   },
   standardHeaders,
   legacyHeaders,
@@ -47,8 +61,15 @@ export const apiLimiter = rateLimit({
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: isDevelopment ? 100 : 20,
-  handler: (_req: Request, res: Response) => {
-    sendError(res, 'Authentication rate limit exceeded', 429);
+  handler: (req: Request, res: Response) => {
+    const requestId = req.id || 'unknown';
+    res.setHeader('X-Request-ID', requestId);
+    res.status(429).json({
+      code: ErrorCodes.RATE_LIMIT_AUTH_EXCEEDED,
+      message: 'Authentication rate limit exceeded',
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+    });
   },
   standardHeaders,
   legacyHeaders,
@@ -62,8 +83,15 @@ export const authLimiter = rateLimit({
 export const invitationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: isDevelopment ? 50 : 10,
-  handler: (_req: Request, res: Response) => {
-    sendError(res, 'Invitation rate limit exceeded. Please try again later.', 429);
+  handler: (req: Request, res: Response) => {
+    const requestId = req.id || 'unknown';
+    res.setHeader('X-Request-ID', requestId);
+    res.status(429).json({
+      code: ErrorCodes.RATE_LIMIT_INVITE_EXCEEDED,
+      message: 'Invitation rate limit exceeded. Please try again later.',
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+    });
   },
   standardHeaders,
   legacyHeaders,

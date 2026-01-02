@@ -213,6 +213,7 @@ const options: swaggerJsdoc.Options = {
             },
             status: {
               type: 'string',
+              enum: ['pending', 'in_progress', 'done', 'not_applicable'],
             },
             created_at: {
               type: 'string',
@@ -323,6 +324,22 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
+        ConflictError: {
+          description: 'Resource conflict or constraint violation',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/Error',
+              },
+              example: {
+                code: 'CONFLICT',
+                message: 'Duplicate entry - resource already exists',
+                request_id: '123e4567-e89b-12d3-a456-426614174000',
+                timestamp: '2025-12-02T10:30:00.000Z',
+              },
+            },
+          },
+        },
         NotFoundError: {
           description: 'Resource not found',
           content: {
@@ -360,8 +377,6 @@ const options: swaggerJsdoc.Options = {
     security: [
       {
         ApiKeyAuth: [],
-      },
-      {
         BearerAuth: [],
       },
     ],

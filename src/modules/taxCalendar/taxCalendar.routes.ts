@@ -7,6 +7,8 @@ import { handleValidationErrors } from '../../utils/validation';
 import * as taxCalendarService from './taxCalendar.service';
 import { auditLogService } from '../../services/auditLogService';
 import { AuditActions } from '../../constants/auditActions';
+import { TAX_CALENDAR_STATUS_VALUES } from './taxCalendar.constants';
+import { ErrorCodes } from '../../constants/errorCodes';
 
 export const taxCalendarRouter = Router({ mergeParams: true });
 
@@ -27,7 +29,7 @@ function getSupabase(req: any, accessToken: string) {
  *       - Tax Calendar
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -111,7 +113,7 @@ function getSupabase(req: any, accessToken: string) {
  *                     timestamp:
  *                       type: string
  *                       format: date-time
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -128,7 +130,7 @@ taxCalendarRouter.get(
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     query('from').optional().isISO8601().withMessage('Invalid date format for from'),
     query('to').optional().isISO8601().withMessage('Invalid date format for to'),
-    query('status').optional().isString().withMessage('Invalid status format'),
+    query('status').optional().isIn(TAX_CALENDAR_STATUS_VALUES).withMessage('Invalid status value'),
     query('jurisdiction').optional().isString().withMessage('Invalid jurisdiction format'),
     query('tax_type').optional().isString().withMessage('Invalid tax_type format'),
     query('limit')
@@ -148,7 +150,7 @@ taxCalendarRouter.get(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);
@@ -202,7 +204,7 @@ taxCalendarRouter.get(
  *       - Tax Calendar
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -290,7 +292,7 @@ taxCalendarRouter.get(
  *                     timestamp:
  *                       type: string
  *                       format: date-time
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -307,7 +309,7 @@ taxCalendarRouter.get(
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     query('from').optional().isISO8601().withMessage('Invalid date format for from'),
     query('to').optional().isISO8601().withMessage('Invalid date format for to'),
-    query('status').optional().isString().withMessage('Invalid status format'),
+    query('status').optional().isIn(TAX_CALENDAR_STATUS_VALUES).withMessage('Invalid status value'),
     query('jurisdiction').optional().isString().withMessage('Invalid jurisdiction format'),
     query('tax_type').optional().isString().withMessage('Invalid tax_type format'),
     query('period_label').optional().isString().withMessage('Invalid period_label format'),
@@ -328,7 +330,7 @@ taxCalendarRouter.get(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);
@@ -393,7 +395,7 @@ taxCalendarRouter.get(
  *       - Tax Calendar
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -467,7 +469,7 @@ taxCalendarRouter.get(
  *                     timestamp:
  *                       type: string
  *                       format: date-time
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -493,7 +495,7 @@ taxCalendarRouter.get(
     query('jurisdiction').optional().isString().withMessage('Invalid jurisdiction format'),
     query('tax_type').optional().isString().withMessage('Invalid tax_type format'),
     query('period_label').optional().isString().withMessage('Invalid period_label format'),
-    query('status').optional().isString().withMessage('Invalid status format'),
+    query('status').optional().isIn(TAX_CALENDAR_STATUS_VALUES).withMessage('Invalid status value'),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
@@ -503,7 +505,7 @@ taxCalendarRouter.get(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);

@@ -11,6 +11,7 @@ export function requestLogger(
 
   // Log incoming request
   logger.info('Incoming request', {
+    request_id: req.id,
     method: req.method,
     url: req.originalUrl,
     ip: req.ip,
@@ -22,6 +23,7 @@ export function requestLogger(
     const status = res.statusCode;
 
     const logData = {
+      request_id: req.id,
       method: req.method,
       url: req.originalUrl,
       status,

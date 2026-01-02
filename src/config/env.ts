@@ -3,10 +3,27 @@ import dotenv from 'dotenv';
 // Load environment variables from .env file
 dotenv.config();
 
+// Check if running in test mode
+const isTestMode = process.env.NODE_ENV === 'test';
+
 // Helper function to get required env variable
 function getRequiredEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
+    // In test mode, return safe dummy values instead of throwing
+    if (isTestMode) {
+      const testDefaults: Record<string, string> = {
+        PORT: '3000',
+        NODE_ENV: 'test',
+        FRONTEND_URL: 'http://localhost:3000',
+        SUPABASE_URL: 'http://localhost:54321',
+        SUPABASE_ANON_KEY: 'test-anon-key',
+        SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+        SUPABASE_JWT_SECRET: 'test-jwt-secret-min-32-chars-long-for-hs256',
+        APP_API_KEY: 'test-api-key',
+      };
+      return testDefaults[key] || `test-${key.toLowerCase()}`;
+    }
     throw new Error(`Missing required environment variable: ${key}`);
   }
   return value;

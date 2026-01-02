@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../../middleware/errorHandler';
+import { TAX_CALENDAR_STATUSES } from './taxCalendar.constants';
 
 const DEFAULT_TZ = process.env.APP_DEFAULT_TZ || 'Europe/Amsterdam';
 
@@ -194,11 +195,11 @@ export async function getSummary(
       summary.by_status[entryStatus] = 1;
     }
 
-    if (deadline < today && entryStatus !== 'done') {
+    if (deadline < today && entryStatus !== TAX_CALENDAR_STATUSES.DONE) {
       summary.overdue++;
     }
 
-    if (deadline >= today && deadline <= dueSoonTo && entryStatus !== 'done') {
+    if (deadline >= today && deadline <= dueSoonTo && entryStatus !== TAX_CALENDAR_STATUSES.DONE) {
       summary.due_soon++;
     }
 
@@ -225,11 +226,11 @@ export async function getSummary(
         summary.by_tax_type[taxType].by_status[entryStatus] = 1;
       }
 
-      if (deadline < today && entryStatus !== 'done') {
+      if (deadline < today && entryStatus !== TAX_CALENDAR_STATUSES.DONE) {
         summary.by_tax_type[taxType].overdue++;
       }
 
-      if (deadline >= today && deadline <= dueSoonTo && entryStatus !== 'done') {
+      if (deadline >= today && deadline <= dueSoonTo && entryStatus !== TAX_CALENDAR_STATUSES.DONE) {
         summary.by_tax_type[taxType].due_soon++;
       }
     }
@@ -275,7 +276,7 @@ export async function getUpcoming(
   if (filters.status) {
     query = query.eq('status', filters.status);
   } else {
-    query = query.neq('status', 'done');
+    query = query.neq('status', TAX_CALENDAR_STATUSES.DONE);
   }
 
   if (filters.jurisdiction) {

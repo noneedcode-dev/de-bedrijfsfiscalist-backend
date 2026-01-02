@@ -4,6 +4,7 @@ import { createSupabaseAdminClient, createSupabaseUserClient } from '../../lib/s
 import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import * as taxRiskControlsService from './taxRiskControls.service';
+import { ErrorCodes } from '../../constants/errorCodes';
 
 export const taxRiskControlsRouter = Router({ mergeParams: true });
 
@@ -23,7 +24,7 @@ function getSupabase(req: any, accessToken: string) {
  *       - Tax Risk Controls
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -86,7 +87,7 @@ function getSupabase(req: any, accessToken: string) {
  *                       type: string
  *                       nullable: true
  *                       description: Process name from tax_function_rows
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -127,13 +128,13 @@ taxRiskControlsRouter.post(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);
 
     if (!req.user) {
-      throw new AppError('User not authenticated', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const input: taxRiskControlsService.CreateRiskControlInput = {
@@ -163,7 +164,7 @@ taxRiskControlsRouter.post(
  *       - Tax Risk Controls
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -246,7 +247,7 @@ taxRiskControlsRouter.post(
  *                       type: integer
  *                     count:
  *                       type: integer
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -295,7 +296,7 @@ taxRiskControlsRouter.get(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);
@@ -331,7 +332,7 @@ taxRiskControlsRouter.get(
  *       - Tax Risk Controls
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -362,7 +363,7 @@ taxRiskControlsRouter.get(
  *                       type: string
  *                       nullable: true
  *                       description: Process name from tax_function_rows
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -390,7 +391,7 @@ taxRiskControlsRouter.get(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);
@@ -411,7 +412,7 @@ taxRiskControlsRouter.get(
  *       - Tax Risk Controls
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -473,7 +474,7 @@ taxRiskControlsRouter.get(
  *                       type: string
  *                       nullable: true
  *                       description: Process name from tax_function_rows
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -518,13 +519,13 @@ taxRiskControlsRouter.patch(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);
 
     if (!req.user) {
-      throw new AppError('User not authenticated', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const input: taxRiskControlsService.UpdateRiskControlInput = {
@@ -554,7 +555,7 @@ taxRiskControlsRouter.patch(
  *       - Tax Risk Controls
  *     security:
  *       - ApiKeyAuth: []
- *       - BearerAuth: []
+ *         BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: clientId
@@ -573,7 +574,7 @@ taxRiskControlsRouter.patch(
  *     responses:
  *       204:
  *         description: Risk control deleted successfully
- *       400:
+ *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
@@ -601,7 +602,7 @@ taxRiskControlsRouter.delete(
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw new AppError('Missing Bearer token', 401);
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
     const supabase = getSupabase(req, token);
