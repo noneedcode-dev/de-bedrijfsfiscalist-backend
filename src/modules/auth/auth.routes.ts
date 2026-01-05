@@ -623,10 +623,26 @@ authRouter.post(
       throw AppError.fromCode(ErrorCodes.PASSWORD_RESET_USER_NOT_FOUND, 404);
     }
 
-    // Step 4: Update password in Supabase Auth using admin client
+    // Step 4: Generate a valid recovery link to bypass Supabase's password reset validation
+    // This creates a legitimate recovery session that Supabase Auth will accept
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email: tokenRecord.email,
+    });
+
+    if (linkError || !linkData) {
+      logger.error('Failed to generate recovery link', {
+        error: linkError,
+        email: tokenRecord.email,
+      });
+      throw AppError.fromCode(ErrorCodes.PASSWORD_RESET_FAILED, 500, {
+        reason: 'Failed to generate recovery session',
+        error: linkError?.message,
+      });
+    }
+
+    // Step 5: Now update password using admin client
     // IMPORTANT: If this fails, token remains unused (not marked as used)
-    // Note: We update user_metadata along with password to bypass Supabase's
-    // built-in password reset flow validation that expects a recovery token
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       user.id,
       {
@@ -666,7 +682,7 @@ authRouter.post(
       });
     }
 
-    // Step 5: Mark token as used ONLY after successful password update
+    // Step 6: Mark token as used ONLY after successful password update
     // Use WHERE clause with used_at IS NULL to prevent race conditions
     const { error: markUsedError } = await supabase
       .from('password_reset_tokens')
