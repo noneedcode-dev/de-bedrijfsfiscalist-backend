@@ -98,3 +98,25 @@ export const invitationLimiter = rateLimit({
   skip: isDevelopment ? () => false : undefined,
 });
 
+/**
+ * Aggressive rate limit for password reset request endpoint (abuse prevention)
+ * 1 saatte IP başına max 5 request (dev: 20)
+ */
+export const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: isDevelopment ? 20 : 5,
+  handler: (req: Request, res: Response) => {
+    const requestId = req.id || 'unknown';
+    res.setHeader('X-Request-ID', requestId);
+    res.status(429).json({
+      code: ErrorCodes.RATE_LIMIT_PASSWORD_RESET_EXCEEDED,
+      message: 'Password reset rate limit exceeded. Please try again later.',
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+    });
+  },
+  standardHeaders,
+  legacyHeaders,
+  skip: isDevelopment ? () => false : undefined,
+});
+

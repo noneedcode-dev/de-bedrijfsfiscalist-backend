@@ -6,6 +6,9 @@ import { handleValidationErrors } from '../../utils/validation';
 import { createSupabaseAdminClient } from '../../lib/supabaseClient';
 import { logger } from '../../config/logger';
 import { ErrorCodes } from '../../constants/errorCodes';
+import { createHash, randomBytes } from 'crypto';
+import { env } from '../../config/env';
+import { passwordResetLimiter } from '../../config/rateLimiter';
 
 export const authRouter = Router();
 
@@ -331,6 +334,335 @@ authRouter.post(
         clientName: invitation.clients?.name || null,
         invitation_id: invitation.id,
         user_id: appUser.id,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * @swagger
+ * /api/auth/password-reset/request:
+ *   post:
+ *     summary: Request password reset token
+ *     description: Generate a secure password reset token and return it (no email sent from backend). Bubble will send the email with the token.
+ *     tags:
+ *       - Authentication
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address of the user requesting password reset
+ *                 example: "user@example.com"
+ *     responses:
+ *       200:
+ *         description: Password reset token generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                       description: Raw password reset token (only returned once, never stored)
+ *                       example: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6"
+ *                     expires_at:
+ *                       type: string
+ *                       format: date-time
+ *                       description: Token expiration timestamp
+ *                       example: "2025-01-06T12:30:00.000Z"
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Invalid email format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       422:
+ *         description: Validation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       429:
+ *         description: Rate limit exceeded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+authRouter.post(
+  '/password-reset/request',
+  passwordResetLimiter,
+  [
+    body('email')
+      .isEmail()
+      .withMessage('Valid email is required')
+      .normalizeEmail(),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    // Generate secure random token (32 bytes = 256 bits)
+    const rawToken = randomBytes(32)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    // Hash the token for storage (SHA-256)
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+
+    // Calculate expiration time
+    const expiresAt = new Date(
+      Date.now() + env.auth.passwordResetTokenTtlMinutes * 60 * 1000
+    );
+
+    // Store token hash in database
+    const { error: insertError } = await supabase
+      .from('password_reset_tokens')
+      .insert({
+        email: email.toLowerCase(),
+        token_hash: tokenHash,
+        expires_at: expiresAt.toISOString(),
+      });
+
+    if (insertError) {
+      logger.error('Failed to create password reset token', {
+        error: insertError,
+        email,
+      });
+      throw AppError.fromCode(ErrorCodes.INTERNAL_ERROR, 500);
+    }
+
+    logger.info('Password reset token generated', {
+      email,
+      expires_at: expiresAt.toISOString(),
+    });
+
+    // Return raw token and expiration (token is NOT logged)
+    return res.json({
+      data: {
+        token: rawToken,
+        expires_at: expiresAt.toISOString(),
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * @swagger
+ * /api/auth/password-reset/confirm:
+ *   post:
+ *     summary: Confirm password reset with token
+ *     description: Validate token and update user password in Supabase Auth
+ *     tags:
+ *       - Authentication
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - new_password
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Password reset token from email link
+ *                 example: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6"
+ *               new_password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 10
+ *                 description: New password (min 10 chars, must include lowercase, uppercase, and digit)
+ *                 example: "NewSecurePass123"
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       example: "success"
+ *                     message:
+ *                       type: string
+ *                       example: "Password has been reset successfully"
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       422:
+ *         description: Weak password or validation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+authRouter.post(
+  '/password-reset/confirm',
+  [
+    body('token').isString().notEmpty().withMessage('Token is required'),
+    body('new_password')
+      .isString()
+      .isLength({ min: 10 })
+      .withMessage('Password must be at least 10 characters')
+      .matches(/[a-z]/)
+      .withMessage('Password must contain at least one lowercase letter')
+      .matches(/[A-Z]/)
+      .withMessage('Password must contain at least one uppercase letter')
+      .matches(/[0-9]/)
+      .withMessage('Password must contain at least one digit'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { token, new_password } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    // Hash the provided token to match against stored hash
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+
+    // Find valid token: matching hash, not used, not expired
+    const { data: tokenRecord, error: tokenError } = await supabase
+      .from('password_reset_tokens')
+      .select('*')
+      .eq('token_hash', tokenHash)
+      .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (tokenError || !tokenRecord) {
+      logger.warn('Invalid or expired password reset token attempt', {
+        error: tokenError?.message,
+      });
+      throw AppError.fromCode(
+        ErrorCodes.PASSWORD_RESET_INVALID_OR_EXPIRED_TOKEN,
+        400
+      );
+    }
+
+    // Find user by email in Supabase Auth
+    const { data: authUsers, error: listError } = await supabase.auth.admin.listUsers();
+
+    if (listError) {
+      logger.error('Failed to list users for password reset', {
+        error: listError,
+      });
+      throw AppError.fromCode(ErrorCodes.INTERNAL_ERROR, 500);
+    }
+
+    const user = authUsers.users.find(
+      (u) => u.email?.toLowerCase() === tokenRecord.email.toLowerCase()
+    );
+
+    if (!user) {
+      logger.warn('User not found for password reset', {
+        email: tokenRecord.email,
+      });
+      throw AppError.fromCode(ErrorCodes.PASSWORD_RESET_USER_NOT_FOUND, 404);
+    }
+
+    // Update password in Supabase Auth using admin client
+    const { error: updateError } = await supabase.auth.admin.updateUserById(
+      user.id,
+      {
+        password: new_password,
+      }
+    );
+
+    if (updateError) {
+      logger.error('Failed to update user password', {
+        error: updateError,
+        userId: user.id,
+      });
+      throw AppError.fromCode(ErrorCodes.PASSWORD_RESET_FAILED, 500, {
+        reason: 'Failed to update password',
+      });
+    }
+
+    // Mark token as used (only after successful password update)
+    const { error: markUsedError } = await supabase
+      .from('password_reset_tokens')
+      .update({ used_at: new Date().toISOString() })
+      .eq('id', tokenRecord.id);
+
+    if (markUsedError) {
+      logger.error('Failed to mark password reset token as used', {
+        error: markUsedError,
+        tokenId: tokenRecord.id,
+      });
+      // Don't fail the request - password was already updated successfully
+    }
+
+    logger.info('Password reset successful', {
+      userId: user.id,
+      email: tokenRecord.email,
+    });
+
+    return res.json({
+      data: {
+        status: 'success',
+        message: 'Password has been reset successfully',
       },
       meta: {
         timestamp: new Date().toISOString(),

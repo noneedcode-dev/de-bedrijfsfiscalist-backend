@@ -24,6 +24,12 @@ export const ErrorCodes = {
   INVITE_CANCELLED: 'INVITE_CANCELLED',
   INVITE_CREATE_FAILED: 'INVITE_CREATE_FAILED',
 
+  // Password Reset
+  PASSWORD_RESET_INVALID_OR_EXPIRED_TOKEN: 'PASSWORD_RESET_INVALID_OR_EXPIRED_TOKEN',
+  PASSWORD_RESET_WEAK_PASSWORD: 'PASSWORD_RESET_WEAK_PASSWORD',
+  PASSWORD_RESET_USER_NOT_FOUND: 'PASSWORD_RESET_USER_NOT_FOUND',
+  PASSWORD_RESET_FAILED: 'PASSWORD_RESET_FAILED',
+
   // Client Access
   CLIENT_ACCESS_DENIED: 'CLIENT_ACCESS_DENIED',
   CLIENT_NOT_FOUND: 'CLIENT_NOT_FOUND',
@@ -60,6 +66,7 @@ export const ErrorCodes = {
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
   RATE_LIMIT_AUTH_EXCEEDED: 'RATE_LIMIT_AUTH_EXCEEDED',
   RATE_LIMIT_INVITE_EXCEEDED: 'RATE_LIMIT_INVITE_EXCEEDED',
+  RATE_LIMIT_PASSWORD_RESET_EXCEEDED: 'RATE_LIMIT_PASSWORD_RESET_EXCEEDED',
 
   // General
   NOT_FOUND: 'NOT_FOUND',
@@ -95,6 +102,12 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   INVITE_ALREADY_ACCEPTED: 'This invitation has already been accepted',
   INVITE_CANCELLED: 'This invitation has been cancelled',
   INVITE_CREATE_FAILED: 'Failed to create invitation',
+
+  // Password Reset
+  PASSWORD_RESET_INVALID_OR_EXPIRED_TOKEN: 'Invalid or expired password reset token',
+  PASSWORD_RESET_WEAK_PASSWORD: 'Password does not meet security requirements',
+  PASSWORD_RESET_USER_NOT_FOUND: 'User not found for password reset',
+  PASSWORD_RESET_FAILED: 'Failed to reset password',
 
   // Client Access
   CLIENT_ACCESS_DENIED: 'Access denied to this client',
@@ -132,6 +145,7 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   RATE_LIMIT_EXCEEDED: 'Rate limit exceeded, please try again later',
   RATE_LIMIT_AUTH_EXCEEDED: 'Authentication rate limit exceeded',
   RATE_LIMIT_INVITE_EXCEEDED: 'Invitation rate limit exceeded',
+  RATE_LIMIT_PASSWORD_RESET_EXCEEDED: 'Password reset rate limit exceeded',
 
   // General
   NOT_FOUND: 'Resource not found',

@@ -58,6 +58,7 @@ export const env = {
   auth: {
     jwtSecret: getOptionalEnv('APP_JWT_SECRET'), // Optional: only if backend signs its own tokens
     apiKey: getRequiredEnv('APP_API_KEY'),
+    passwordResetTokenTtlMinutes: parseInt(getOptionalEnv('PASSWORD_RESET_TOKEN_TTL_MINUTES') || '30', 10),
   },
   
   // S3 (optional)
