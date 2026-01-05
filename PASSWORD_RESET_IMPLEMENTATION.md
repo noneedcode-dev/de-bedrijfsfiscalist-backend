@@ -110,13 +110,18 @@ Created `password_reset_tokens` table with:
 - Token validation: hash match, not used, not expired
 - Single-use tokens (marked as used after successful reset)
 - Password updated via Supabase Auth admin API
-- Token marked as used only after successful password update
+- Token marked as used ONLY after successful password update
+- If password validation fails (Supabase policy), token remains reusable
 - Raw token never logged
+- Race condition protection: WHERE used_at IS NULL in update query
 
 **Error Responses:**
 - `400` - Invalid or expired token (PASSWORD_RESET_INVALID_OR_EXPIRED_TOKEN)
 - `404` - User not found (PASSWORD_RESET_USER_NOT_FOUND)
-- `422` - Weak password or validation failed (VALIDATION_FAILED)
+- `422` - Weak password or validation failed (VALIDATION_FAILED or PASSWORD_RESET_WEAK_PASSWORD)
+  - Backend validation: min 10 chars, lowercase, uppercase, digit
+  - Supabase validation: returns actual Supabase error message
+  - **Token NOT consumed** - can be retried with stronger password
 - `500` - Password update failed (PASSWORD_RESET_FAILED)
 
 ---

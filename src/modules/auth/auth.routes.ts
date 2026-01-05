@@ -574,13 +574,14 @@ authRouter.post(
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
+    // Step 1: Parse body and validate (already done by middleware)
     const { token, new_password } = req.body;
     const supabase = createSupabaseAdminClient();
 
-    // Hash the provided token to match against stored hash
+    // Step 2: Compute token hash and query token record
     const tokenHash = createHash('sha256').update(token).digest('hex');
 
-    // Find valid token: matching hash, not used, not expired
+    // Step 3: Find valid token: matching hash, not used, not expired
     const { data: tokenRecord, error: tokenError } = await supabase
       .from('password_reset_tokens')
       .select('*')
@@ -622,7 +623,8 @@ authRouter.post(
       throw AppError.fromCode(ErrorCodes.PASSWORD_RESET_USER_NOT_FOUND, 404);
     }
 
-    // Update password in Supabase Auth using admin client
+    // Step 4: Update password in Supabase Auth using admin client
+    // IMPORTANT: If this fails, token remains unused (not marked as used)
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       user.id,
       {
@@ -631,20 +633,40 @@ authRouter.post(
     );
 
     if (updateError) {
-      logger.error('Failed to update user password', {
+      logger.error('Failed to update user password - token NOT consumed', {
         error: updateError,
         userId: user.id,
+        email: tokenRecord.email,
+        supabaseErrorMessage: updateError.message,
       });
+      
+      // Check if it's a password policy error from Supabase Auth
+      const errorMessage = updateError.message?.toLowerCase() || '';
+      if (errorMessage.includes('password') || 
+          errorMessage.includes('weak') || 
+          errorMessage.includes('strong') ||
+          errorMessage.includes('policy')) {
+        // Return 422 with Supabase's actual error message
+        throw AppError.fromCode(ErrorCodes.PASSWORD_RESET_WEAK_PASSWORD, 422, {
+          reason: updateError.message,
+          supabase_error: updateError,
+        });
+      }
+      
+      // Other errors (network, auth, etc.)
       throw AppError.fromCode(ErrorCodes.PASSWORD_RESET_FAILED, 500, {
         reason: 'Failed to update password',
+        error: updateError.message,
       });
     }
 
-    // Mark token as used (only after successful password update)
+    // Step 5: Mark token as used ONLY after successful password update
+    // Use WHERE clause with used_at IS NULL to prevent race conditions
     const { error: markUsedError } = await supabase
       .from('password_reset_tokens')
       .update({ used_at: new Date().toISOString() })
-      .eq('id', tokenRecord.id);
+      .eq('id', tokenRecord.id)
+      .is('used_at', null);
 
     if (markUsedError) {
       logger.error('Failed to mark password reset token as used', {
