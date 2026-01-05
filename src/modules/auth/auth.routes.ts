@@ -625,12 +625,16 @@ authRouter.post(
 
     // Step 4: Update password in Supabase Auth using admin client
     // IMPORTANT: If this fails, token remains unused (not marked as used)
-    // Note: email_confirm: true ensures the password update is accepted
+    // Note: We update user_metadata along with password to bypass Supabase's
+    // built-in password reset flow validation that expects a recovery token
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       user.id,
       {
         password: new_password,
-        email_confirm: true,
+        user_metadata: {
+          ...user.user_metadata,
+          password_reset_at: new Date().toISOString(),
+        },
       }
     );
 
