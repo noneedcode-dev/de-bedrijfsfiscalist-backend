@@ -30,6 +30,11 @@ export const ErrorCodes = {
   PASSWORD_RESET_USER_NOT_FOUND: 'PASSWORD_RESET_USER_NOT_FOUND',
   PASSWORD_RESET_FAILED: 'PASSWORD_RESET_FAILED',
 
+  // Login & Password Change
+  AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
+  AUTH_CHANGE_PASSWORD_WEAK: 'AUTH_CHANGE_PASSWORD_WEAK',
+  AUTH_CHANGE_PASSWORD_FAILED: 'AUTH_CHANGE_PASSWORD_FAILED',
+
   // Client Access
   CLIENT_ACCESS_DENIED: 'CLIENT_ACCESS_DENIED',
   CLIENT_NOT_FOUND: 'CLIENT_NOT_FOUND',
@@ -108,6 +113,11 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   PASSWORD_RESET_WEAK_PASSWORD: 'Password does not meet security requirements',
   PASSWORD_RESET_USER_NOT_FOUND: 'User not found for password reset',
   PASSWORD_RESET_FAILED: 'Failed to reset password',
+
+  // Login & Password Change
+  AUTH_INVALID_CREDENTIALS: 'Invalid email or password',
+  AUTH_CHANGE_PASSWORD_WEAK: 'Password does not meet security requirements',
+  AUTH_CHANGE_PASSWORD_FAILED: 'Failed to change password',
 
   // Client Access
   CLIENT_ACCESS_DENIED: 'Access denied to this client',

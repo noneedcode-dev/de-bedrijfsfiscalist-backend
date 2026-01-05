@@ -9,8 +9,145 @@ import { ErrorCodes } from '../../constants/errorCodes';
 import { createHash, randomBytes } from 'crypto';
 import { env } from '../../config/env';
 import { passwordResetLimiter } from '../../config/rateLimiter';
+import { authenticateJWT } from './auth.middleware';
 
 export const authRouter = Router();
+
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login with email and password
+ *     description: Authenticate user with Supabase Auth and return access token. This endpoint is called by Bubble after password reset to obtain a backend access token.
+ *     tags:
+ *       - Authentication
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: User email address
+ *                 example: "user@example.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 description: User password
+ *                 example: "SecurePass123"
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     access_token:
+ *                       type: string
+ *                       description: JWT access token for API authentication
+ *                       example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                     refresh_token:
+ *                       type: string
+ *                       description: Refresh token for obtaining new access tokens
+ *                       example: "v1.MRjBZ..."
+ *                     expires_in:
+ *                       type: number
+ *                       description: Token expiration time in seconds
+ *                       example: 3600
+ *                     token_type:
+ *                       type: string
+ *                       description: Token type (always "bearer")
+ *                       example: "bearer"
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Invalid request format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       422:
+ *         description: Validation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+authRouter.post(
+  '/login',
+  [
+    body('email')
+      .isEmail()
+      .withMessage('Valid email is required')
+      .normalizeEmail(),
+    body('password')
+      .isString()
+      .notEmpty()
+      .withMessage('Password is required'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { email, password } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error || !data.session) {
+      logger.warn('Login failed: invalid credentials', {
+        email,
+        error: error?.message,
+      });
+      throw AppError.fromCode(ErrorCodes.AUTH_INVALID_CREDENTIALS, 401);
+    }
+
+    logger.info('User logged in successfully', {
+      userId: data.user.id,
+      email: data.user.email,
+    });
+
+    return res.json({
+      data: {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_in: data.session.expires_in,
+        token_type: data.session.token_type,
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
 
 /**
  * GET /api/auth/invitation/:token
@@ -707,6 +844,137 @@ authRouter.post(
       data: {
         status: 'success',
         message: 'Password has been reset successfully',
+      },
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change password for authenticated user
+ *     description: Update the password for the currently authenticated user. Requires Bearer token authentication. Called by Bubble after user logs in with new Bubble password.
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - new_password
+ *             properties:
+ *               new_password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 10
+ *                 description: New password (min 10 chars, must include lowercase, uppercase, and digit)
+ *                 example: "NewSecurePass123"
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       example: "success"
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Missing or invalid authentication token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       422:
+ *         description: Weak password or validation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+authRouter.post(
+  '/change-password',
+  authenticateJWT,
+  [
+    body('new_password')
+      .isString()
+      .isLength({ min: 10 })
+      .withMessage('Password must be at least 10 characters')
+      .matches(/[a-z]/)
+      .withMessage('Password must contain at least one lowercase letter')
+      .matches(/[A-Z]/)
+      .withMessage('Password must contain at least one uppercase letter')
+      .matches(/[0-9]/)
+      .withMessage('Password must contain at least one digit'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { new_password } = req.body;
+    const userId = req.user!.sub;
+    const supabase = createSupabaseAdminClient();
+
+    const { error: updateError } = await supabase.auth.admin.updateUserById(
+      userId,
+      {
+        password: new_password,
+      }
+    );
+
+    if (updateError) {
+      logger.error('Failed to change password', {
+        error: updateError,
+        userId,
+      });
+
+      const errorMessage = updateError.message?.toLowerCase() || '';
+      if (
+        errorMessage.includes('password') ||
+        errorMessage.includes('weak') ||
+        errorMessage.includes('strong') ||
+        errorMessage.includes('policy')
+      ) {
+        throw AppError.fromCode(ErrorCodes.AUTH_CHANGE_PASSWORD_WEAK, 422, {
+          reason: updateError.message,
+        });
+      }
+
+      throw AppError.fromCode(ErrorCodes.AUTH_CHANGE_PASSWORD_FAILED, 500, {
+        reason: 'Failed to update password',
+        error: updateError.message,
+      });
+    }
+
+    logger.info('Password changed successfully', {
+      userId,
+    });
+
+    return res.json({
+      data: {
+        status: 'success',
       },
       meta: {
         timestamp: new Date().toISOString(),
