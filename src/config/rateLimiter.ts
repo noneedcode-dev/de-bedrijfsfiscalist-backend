@@ -34,7 +34,7 @@ export const healthLimiter = rateLimit({
 
 /**
  * Rate limiting for API routes
- * 15 dakikada IP başına max 100 request (dev: 1000)
+ * 15 dakikada IP başına max 100 request (dev: 1000, test: disabled)
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 dakika
@@ -51,12 +51,12 @@ export const apiLimiter = rateLimit({
   },
   standardHeaders,
   legacyHeaders,
-  skip: isDevelopment ? () => false : undefined,
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 /**
  * Daha sıkı rate limit (auth endpoints için)
- * 15 dakikada IP başına max 20 request (dev: 100)
+ * 15 dakikada IP başına max 20 request (dev: 100, test: disabled)
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -73,7 +73,7 @@ export const authLimiter = rateLimit({
   },
   standardHeaders,
   legacyHeaders,
-  skip: isDevelopment ? () => false : undefined,
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 /**
@@ -100,7 +100,7 @@ export const invitationLimiter = rateLimit({
 
 /**
  * Aggressive rate limit for password reset request endpoint (abuse prevention)
- * 1 saatte IP başına max 5 request (dev: 20)
+ * 1 saatte IP başına max 5 request (dev: 20, test: disabled)
  */
 export const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -117,6 +117,6 @@ export const passwordResetLimiter = rateLimit({
   },
   standardHeaders,
   legacyHeaders,
-  skip: isDevelopment ? () => false : undefined,
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
