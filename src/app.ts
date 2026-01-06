@@ -16,6 +16,7 @@ import { healthLimiter, apiLimiter, authLimiter, invitationLimiter } from './con
 import { healthRouter } from './modules/health/health.routes';
 import { taxCalendarRouter } from './modules/taxCalendar/taxCalendar.routes';
 import { taxRiskControlsRouter } from './modules/taxRiskControls/taxRiskControls.routes';
+import { taxFunctionRouter } from './modules/taxFunction/taxFunction.routes';
 import { documentsRouter } from './modules/documents/documents.routes';
 import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
@@ -85,6 +86,7 @@ export function createApp() {
 
   clientRouter.use('/tax/calendar', taxCalendarRouter);
   clientRouter.use('/tax/risk-controls', taxRiskControlsRouter);
+  clientRouter.use('/tax/function', taxFunctionRouter);
   clientRouter.use('/documents', documentsRouter);
 
   app.use('/api/clients/:clientId', authenticateJWT, validateClientAccess, clientRouter);

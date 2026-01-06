@@ -60,6 +60,11 @@ export const ErrorCodes = {
   TAX_CALENDAR_CREATE_FAILED: 'TAX_CALENDAR_CREATE_FAILED',
   TAX_CALENDAR_UPDATE_FAILED: 'TAX_CALENDAR_UPDATE_FAILED',
 
+  // Tax Function
+  TAX_FUNCTION_FETCH_FAILED: 'TAX_FUNCTION_FETCH_FAILED',
+  TAX_FUNCTION_CREATE_FAILED: 'TAX_FUNCTION_CREATE_FAILED',
+  TAX_FUNCTION_DELETE_FAILED: 'TAX_FUNCTION_DELETE_FAILED',
+
   // Validation
   VALIDATION_FAILED: 'VALIDATION_FAILED',
   VALIDATION_INVALID_UUID: 'VALIDATION_INVALID_UUID',
@@ -143,6 +148,11 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   TAX_CALENDAR_FETCH_FAILED: 'Failed to fetch tax calendar entries',
   TAX_CALENDAR_CREATE_FAILED: 'Failed to create tax calendar entry',
   TAX_CALENDAR_UPDATE_FAILED: 'Failed to update tax calendar entry',
+
+  // Tax Function
+  TAX_FUNCTION_FETCH_FAILED: 'Failed to fetch tax function data',
+  TAX_FUNCTION_CREATE_FAILED: 'Failed to create tax function data',
+  TAX_FUNCTION_DELETE_FAILED: 'Failed to delete tax function data',
 
   // Validation
   VALIDATION_FAILED: 'Validation failed',
