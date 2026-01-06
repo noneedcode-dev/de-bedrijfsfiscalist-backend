@@ -1,4 +1,6 @@
-export type RiskLevel = 'green' | 'amber' | 'red';
+import { computeScore, computeLevel, RiskLevel as SharedRiskLevel } from '../shared/riskScoring';
+
+export type RiskLevel = SharedRiskLevel;
 
 export interface RiskScoreResult {
   score: number;
@@ -6,26 +8,18 @@ export interface RiskScoreResult {
 }
 
 export function computeRiskScore(likelihood: number | null, impact: number | null): number {
-  if (likelihood === null || impact === null) {
-    return 0;
-  }
-  return likelihood * impact;
+  return computeScore(likelihood, impact);
 }
 
 export function computeRiskLevel(score: number): RiskLevel {
-  if (score >= 13) {
-    return 'red';
-  } else if (score >= 6) {
-    return 'amber';
-  }
-  return 'green';
+  return computeLevel(score);
 }
 
 export function computeRiskScoreAndLevel(
   likelihood: number | null,
   impact: number | null
 ): RiskScoreResult {
-  const score = computeRiskScore(likelihood, impact);
-  const level = computeRiskLevel(score);
+  const score = computeScore(likelihood, impact);
+  const level = computeLevel(score);
   return { score, level };
 }

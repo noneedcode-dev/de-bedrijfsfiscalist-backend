@@ -360,7 +360,7 @@ taxRiskControlsRouter.get(
  *                       properties:
  *                         green:
  *                           type: integer
- *                         amber:
+ *                         orange:
  *                           type: integer
  *                         red:
  *                           type: integer
@@ -395,7 +395,7 @@ taxRiskControlsRouter.get(
  *                             maximum: 25
  *                           level:
  *                             type: string
- *                             enum: [green, amber, red]
+ *                             enum: [green, orange, red]
  *                           status:
  *                             type: string
  *                             enum: [open, closed]
@@ -482,7 +482,7 @@ taxRiskControlsRouter.get(
  *                             properties:
  *                               green:
  *                                 type: integer
- *                               amber:
+ *                               orange:
  *                                 type: integer
  *                               red:
  *                                 type: integer
@@ -505,7 +505,7 @@ taxRiskControlsRouter.get(
  *                         green_max:
  *                           type: integer
  *                           example: 5
- *                         amber_max:
+ *                         orange_max:
  *                           type: integer
  *                           example: 12
  *                         red_max:

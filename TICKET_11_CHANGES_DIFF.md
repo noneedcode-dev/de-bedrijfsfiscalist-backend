@@ -44,8 +44,8 @@
 
 ### Risk Matrix Templates (4 entries)
 ```typescript
-{ risk_code: 'VAT-001', likelihood: 3, impact: 4, score: 12, score_color: 'amber' }
-{ risk_code: 'CIT-001', likelihood: 2, impact: 5, score: 10, score_color: 'amber' }
+{ risk_code: 'VAT-001', likelihood: 3, impact: 4, score: 12, score_color: 'orange' }
+{ risk_code: 'CIT-001', likelihood: 2, impact: 5, score: 10, score_color: 'orange' }
 { risk_code: 'TP-001', likelihood: 4, impact: 5, score: 20, score_color: 'red' }
 { risk_code: 'WHT-001', likelihood: 2, impact: 3, score: 6, score_color: 'green' }
 ```

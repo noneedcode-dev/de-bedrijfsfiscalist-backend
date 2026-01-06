@@ -32,7 +32,7 @@ Created three tables:
 - Score = likelihood × impact
 - Risk levels:
   - Green: 1-5
-  - Amber: 6-12
+  - Orange: 6-12
   - Red: 13-25
 - Uses shared helpers: `computeRiskScore()` and `computeRiskLevel()`
 
@@ -90,8 +90,8 @@ Complete OpenAPI/Swagger documentation included in routes file with:
 - PATCH endpoint updates
 - Score/level calculation for all boundary values:
   - Score 5 → green
-  - Score 6 → amber
-  - Score 12 → amber
+  - Score 6 → orange
+  - Score 12 → orange
   - Score 13 → red
   - Score 25 → red
 - Partial updates

@@ -77,7 +77,7 @@ describe('Risk Aggregations API', () => {
       expect(res.body.data).toHaveProperty('top_risks');
       
       expect(res.body.data.total_risks).toBe(0);
-      expect(res.body.data.by_level).toEqual({ green: 0, amber: 0, red: 0 });
+      expect(res.body.data.by_level).toEqual({ green: 0, orange: 0, red: 0 });
       expect(res.body.data.by_status).toEqual({ open: 0, closed: 0 });
       expect(res.body.data.top_risks).toEqual([]);
     });
@@ -102,17 +102,17 @@ describe('Risk Aggregations API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.total_risks).toBe(2);
       expect(res.body.data.by_level.green).toBe(2);
-      expect(res.body.data.by_level.amber).toBe(0);
+      expect(res.body.data.by_level.orange).toBe(0);
       expect(res.body.data.by_level.red).toBe(0);
     });
 
-    it('should correctly classify risks by level (amber: 6-12)', async () => {
+    it('should correctly classify risks by level (orange: 6-12)', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
       const mockSupabase = createMockQueryBuilder({
         data: [
-          { id: '1', risk_description: 'Risk 1', inherent_likelihood: 2, inherent_impact: 3, inherent_score: 6, inherent_color: 'amber', response: 'Monitor' },
-          { id: '2', risk_description: 'Risk 2', inherent_likelihood: 3, inherent_impact: 4, inherent_score: 12, inherent_color: 'amber', response: 'Mitigate' },
+          { id: '1', risk_description: 'Risk 1', inherent_likelihood: 2, inherent_impact: 3, inherent_score: 6, inherent_color: 'orange', response: 'Monitor' },
+          { id: '2', risk_description: 'Risk 2', inherent_likelihood: 3, inherent_impact: 4, inherent_score: 12, inherent_color: 'orange', response: 'Mitigate' },
         ],
         error: null
       });
@@ -126,7 +126,7 @@ describe('Risk Aggregations API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.total_risks).toBe(2);
       expect(res.body.data.by_level.green).toBe(0);
-      expect(res.body.data.by_level.amber).toBe(2);
+      expect(res.body.data.by_level.orange).toBe(2);
       expect(res.body.data.by_level.red).toBe(0);
     });
 
@@ -150,7 +150,7 @@ describe('Risk Aggregations API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.total_risks).toBe(2);
       expect(res.body.data.by_level.green).toBe(0);
-      expect(res.body.data.by_level.amber).toBe(0);
+      expect(res.body.data.by_level.orange).toBe(0);
       expect(res.body.data.by_level.red).toBe(2);
     });
 
@@ -159,7 +159,7 @@ describe('Risk Aggregations API', () => {
       
       const mockSupabase = createMockQueryBuilder({
         data: [
-          { id: '1', risk_description: 'Risk 1', inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9, inherent_color: 'amber', response: 'Monitor' },
+          { id: '1', risk_description: 'Risk 1', inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9, inherent_color: 'orange', response: 'Monitor' },
           { id: '2', risk_description: 'Risk 2', inherent_likelihood: 4, inherent_impact: 4, inherent_score: 16, inherent_color: 'red', response: 'Mitigate' },
           { id: '3', risk_description: 'Risk 3', inherent_likelihood: 2, inherent_impact: 2, inherent_score: 4, inherent_color: 'green', response: 'Accept' },
         ],
@@ -186,8 +186,8 @@ describe('Risk Aggregations API', () => {
           { id: '1', risk_description: 'Risk 1', inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25, inherent_color: 'red', response: 'Mitigate' },
           { id: '2', risk_description: 'Risk 2', inherent_likelihood: 4, inherent_impact: 5, inherent_score: 20, inherent_color: 'red', response: 'Monitor' },
           { id: '3', risk_description: 'Risk 3', inherent_likelihood: 4, inherent_impact: 4, inherent_score: 16, inherent_color: 'red', response: 'Mitigate' },
-          { id: '4', risk_description: 'Risk 4', inherent_likelihood: 3, inherent_impact: 4, inherent_score: 12, inherent_color: 'amber', response: 'Monitor' },
-          { id: '5', risk_description: 'Risk 5', inherent_likelihood: 2, inherent_impact: 4, inherent_score: 8, inherent_color: 'amber', response: 'Mitigate' },
+          { id: '4', risk_description: 'Risk 4', inherent_likelihood: 3, inherent_impact: 4, inherent_score: 12, inherent_color: 'orange', response: 'Monitor' },
+          { id: '5', risk_description: 'Risk 5', inherent_likelihood: 2, inherent_impact: 4, inherent_score: 8, inherent_color: 'orange', response: 'Mitigate' },
           { id: '6', risk_description: 'Risk 6', inherent_likelihood: 2, inherent_impact: 2, inherent_score: 4, inherent_color: 'green', response: 'Monitor' },
           { id: '7', risk_description: 'Risk 7', inherent_likelihood: 1, inherent_impact: 1, inherent_score: 1, inherent_color: 'green', response: 'Monitor' },
         ],
@@ -227,7 +227,7 @@ describe('Risk Aggregations API', () => {
         data: [
           { id: '1', risk_description: 'Risk 1', inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25, inherent_color: 'red', response: 'Accept' },
           { id: '2', risk_description: 'Risk 2', inherent_likelihood: 4, inherent_impact: 4, inherent_score: 16, inherent_color: 'red', response: 'Mitigate' },
-          { id: '3', risk_description: 'Risk 3', inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9, inherent_color: 'amber', response: 'Monitor' },
+          { id: '3', risk_description: 'Risk 3', inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9, inherent_color: 'orange', response: 'Monitor' },
         ],
         error: null
       });
@@ -335,7 +335,7 @@ describe('Risk Aggregations API', () => {
       });
       expect(res.body.data.thresholds).toEqual({
         green_max: 5,
-        amber_max: 12,
+        orange_max: 12,
         red_max: 25
       });
     });
@@ -400,17 +400,17 @@ describe('Risk Aggregations API', () => {
       
       const cell_2_2 = res.body.data.cells.find((c: any) => c.likelihood === 2 && c.impact === 2);
       expect(cell_2_2.by_level.green).toBe(2);
-      expect(cell_2_2.by_level.amber).toBe(0);
+      expect(cell_2_2.by_level.orange).toBe(0);
       expect(cell_2_2.by_level.red).toBe(0);
       
       const cell_3_3 = res.body.data.cells.find((c: any) => c.likelihood === 3 && c.impact === 3);
       expect(cell_3_3.by_level.green).toBe(0);
-      expect(cell_3_3.by_level.amber).toBe(3);
+      expect(cell_3_3.by_level.orange).toBe(3);
       expect(cell_3_3.by_level.red).toBe(0);
       
       const cell_5_5 = res.body.data.cells.find((c: any) => c.likelihood === 5 && c.impact === 5);
       expect(cell_5_5.by_level.green).toBe(0);
-      expect(cell_5_5.by_level.amber).toBe(0);
+      expect(cell_5_5.by_level.orange).toBe(0);
       expect(cell_5_5.by_level.red).toBe(1);
     });
 
@@ -480,7 +480,7 @@ describe('Risk Aggregations API', () => {
       
       const mockSupabase = createMockQueryBuilder({
         data: [
-          { id: '1', risk_description: 'Risk 1', inherent_likelihood: 2, inherent_impact: 3, inherent_score: 6, inherent_color: 'amber', response: 'Monitor' },
+          { id: '1', risk_description: 'Risk 1', inherent_likelihood: 2, inherent_impact: 3, inherent_score: 6, inherent_color: 'orange', response: 'Monitor' },
           { id: '2', risk_description: 'Risk 2', inherent_likelihood: 4, inherent_impact: 4, inherent_score: 16, inherent_color: 'red', response: 'Mitigate' },
           { id: '3', risk_description: 'Risk 3', inherent_likelihood: 1, inherent_impact: 3, inherent_score: 3, inherent_color: 'green', response: 'Monitor' },
         ],
@@ -495,24 +495,24 @@ describe('Risk Aggregations API', () => {
       
       expect(summaryRes.status).toBe(200);
       expect(summaryRes.body.data.by_level.green).toBe(1);
-      expect(summaryRes.body.data.by_level.amber).toBe(1);
+      expect(summaryRes.body.data.by_level.orange).toBe(1);
       expect(summaryRes.body.data.by_level.red).toBe(1);
       
       expect(summaryRes.body.data.top_risks[0].level).toBe('red');
       expect(summaryRes.body.data.top_risks[0].score).toBe(16);
-      expect(summaryRes.body.data.top_risks[1].level).toBe('amber');
+      expect(summaryRes.body.data.top_risks[1].level).toBe('orange');
       expect(summaryRes.body.data.top_risks[1].score).toBe(6);
       expect(summaryRes.body.data.top_risks[2].level).toBe('green');
       expect(summaryRes.body.data.top_risks[2].score).toBe(3);
     });
 
-    it('should correctly classify (1,5)=green, (3,4)=amber, (5,5)=red', async () => {
+    it('should correctly classify (1,5)=green, (3,4)=orange, (5,5)=red', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
       const mockSupabase = createMockQueryBuilder({
         data: [
           { id: '1', risk_description: 'Risk 1', inherent_likelihood: 1, inherent_impact: 5, inherent_score: 5, inherent_color: 'green', response: 'Monitor' },
-          { id: '2', risk_description: 'Risk 2', inherent_likelihood: 3, inherent_impact: 4, inherent_score: 12, inherent_color: 'amber', response: 'Monitor' },
+          { id: '2', risk_description: 'Risk 2', inherent_likelihood: 3, inherent_impact: 4, inherent_score: 12, inherent_color: 'orange', response: 'Monitor' },
           { id: '3', risk_description: 'Risk 3', inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25, inherent_color: 'red', response: 'Mitigate' },
         ],
         error: null
@@ -526,7 +526,7 @@ describe('Risk Aggregations API', () => {
       
       expect(res.status).toBe(200);
       expect(res.body.data.by_level.green).toBe(1);
-      expect(res.body.data.by_level.amber).toBe(1);
+      expect(res.body.data.by_level.orange).toBe(1);
       expect(res.body.data.by_level.red).toBe(1);
       
       const risk1 = res.body.data.top_risks.find((r: any) => r.id === '1');
@@ -535,7 +535,7 @@ describe('Risk Aggregations API', () => {
       
       const risk2 = res.body.data.top_risks.find((r: any) => r.id === '2');
       expect(risk2.score).toBe(12);
-      expect(risk2.level).toBe('amber');
+      expect(risk2.level).toBe('orange');
       
       const risk3 = res.body.data.top_risks.find((r: any) => r.id === '3');
       expect(risk3.score).toBe(25);

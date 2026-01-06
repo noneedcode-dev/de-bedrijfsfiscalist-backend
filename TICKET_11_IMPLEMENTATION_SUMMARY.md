@@ -28,8 +28,8 @@ Implemented automatic provisioning of default template data when a new client is
 - 1 monthly Dutch Payroll Tax return (January)
 
 #### Tax Risk Matrix (4 entries)
-- VAT-001: Cross-border VAT risk (amber)
-- CIT-001: Non-deductible expenses risk (amber)
+- VAT-001: Cross-border VAT risk (orange)
+- CIT-001: Non-deductible expenses risk (orange)
 - TP-001: Transfer pricing risk (red)
 - WHT-001: Withholding tax risk (green)
 

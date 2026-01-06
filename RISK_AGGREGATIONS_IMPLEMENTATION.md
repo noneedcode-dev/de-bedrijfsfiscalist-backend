@@ -19,7 +19,7 @@ January 6, 2026
 
 ### Level Thresholds
 - **green**: score 1-5
-- **amber**: score 6-12
+- **orange**: score 6-12
 - **red**: score 13-25
 
 ### Status Mapping
@@ -40,7 +40,7 @@ January 6, 2026
     "total_risks": 10,
     "by_level": {
       "green": 3,
-      "amber": 5,
+      "orange": 5,
       "red": 2
     },
     "by_status": {
@@ -64,7 +64,7 @@ January 6, 2026
 
 **Features**:
 - Returns total risk count for client
-- Aggregates risks by level (green/amber/red)
+- Aggregates risks by level (green/orange/red)
 - Aggregates risks by status (open/closed)
 - Returns top 5 non-closed risks ordered by score DESC
 - Empty client returns zero-safe response (no 500 errors)
@@ -85,7 +85,7 @@ January 6, 2026
         "count_total": 5,
         "by_level": {
           "green": 0,
-          "amber": 5,
+          "orange": 5,
           "red": 0
         }
       }
@@ -96,7 +96,7 @@ January 6, 2026
     },
     "thresholds": {
       "green_max": 5,
-      "amber_max": 12,
+      "orange_max": 12,
       "red_max": 25
     }
   }
@@ -125,7 +125,7 @@ January 6, 2026
 
 3. **`tests/riskAggregations.test.ts`**
    - Updated all heatmap tests to use RPC mock pattern
-   - Added specific test for (1,5)=green, (3,4)=amber, (5,5)=red
+   - Added specific test for (1,5)=green, (3,4)=orange, (5,5)=red
    - All 23 tests passing
 
 ### Files Created
@@ -151,7 +151,7 @@ January 6, 2026
 
 **`src/utils/riskScore.ts`** (already existed, no changes needed):
 - `computeRiskScore(likelihood, impact)`: returns score
-- `computeRiskLevel(score)`: returns 'green' | 'amber' | 'red'
+- `computeRiskLevel(score)`: returns 'green' | 'orange' | 'red'
 - `computeRiskScoreAndLevel()`: convenience function
 
 ## Database Schema
@@ -162,7 +162,7 @@ Relevant columns:
 - `inherent_likelihood`: integer 1-5
 - `inherent_impact`: integer 1-5
 - `inherent_score`: integer 1-25
-- `inherent_color`: text (green/amber/red)
+- `inherent_color`: text (green/orange/red)
 - `response`: text (Mitigate/Monitor/Accept)
 - `risk_description`: text
 
@@ -199,7 +199,7 @@ $$;
 ✅ Client ID format validation  
 ✅ Empty data returns zero-safe response  
 ✅ Green level classification (1-5)  
-✅ Amber level classification (6-12)  
+✅ Orange level classification (6-12)  
 ✅ Red level classification (13-25)  
 ✅ Status classification (open vs closed)  
 ✅ Top 5 risks sorted by score DESC  
@@ -220,7 +220,7 @@ $$;
 
 ### Consistency Tests (2 tests)
 ✅ Consistent scoring across endpoints  
-✅ Specific cases: (1,5)=green, (3,4)=amber, (5,5)=red  
+✅ Specific cases: (1,5)=green, (3,4)=orange, (5,5)=red  
 
 **Total: 23/23 tests passing**
 

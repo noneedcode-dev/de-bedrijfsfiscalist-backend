@@ -1,17 +1,17 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../../middleware/errorHandler';
 import { AuthUser } from '../../types/express';
-import { computeRiskScore, computeRiskLevel, RiskLevel } from '../../utils/riskScore';
+import { computeScore, computeLevel, RiskLevel } from '../../shared/riskScoring';
 
 export interface RiskScore {
   score: number;
-  color: string;
+  level: RiskLevel;
 }
 
 export function computeRisk(chance: number | null, impact: number | null): RiskScore {
-  const score = computeRiskScore(chance, impact);
-  const color = computeRiskLevel(score);
-  return { score, color };
+  const score = computeScore(chance, impact);
+  const level = computeLevel(score);
+  return { score, level };
 }
 
 export async function upsertProcess(
@@ -75,7 +75,7 @@ export async function createRiskControl(
     processId = await upsertProcess(supabase, clientId, input.process_name);
   }
 
-  const { score, color } = computeRisk(input.chance, input.impact);
+  const { score, level } = computeRisk(input.chance, input.impact);
 
   const createdByUserId = user.sub;
   const createdByDisplay = await getUserDisplay(supabase, createdByUserId);
@@ -111,7 +111,7 @@ export async function createRiskControl(
     inherent_likelihood: input.chance,
     inherent_impact: input.impact,
     inherent_score: score,
-    inherent_color: color,
+    inherent_color: level,
     control_description: input.control_measure,
   };
 
@@ -272,14 +272,14 @@ export async function updateRiskControl(
 
   const chance = input.chance !== undefined ? input.chance : existing.inherent_likelihood;
   const impact = input.impact !== undefined ? input.impact : existing.inherent_impact;
-  const { score, color } = computeRisk(chance, impact);
+  const { score, level } = computeRisk(chance, impact);
 
   const updateData: any = {
     process_id: processId,
     inherent_likelihood: chance,
     inherent_impact: impact,
     inherent_score: score,
-    inherent_color: color,
+    inherent_color: level,
   };
 
   if (input.risk_description !== undefined) {
@@ -356,7 +356,7 @@ export async function deleteRiskControl(
 
 export interface RiskSummaryByLevel {
   green: number;
-  amber: number;
+  orange: number;
   red: number;
 }
 
@@ -399,7 +399,7 @@ export async function getRiskSummary(
 
   const by_level: RiskSummaryByLevel = {
     green: 0,
-    amber: 0,
+    orange: 0,
     red: 0,
   };
 
@@ -411,8 +411,10 @@ export async function getRiskSummary(
   if (risks) {
     for (const risk of risks) {
       const score = risk.inherent_score || 0;
-      const level = computeRiskLevel(score);
-      by_level[level]++;
+      const level = computeLevel(score);
+      if (level === 'green' || level === 'orange' || level === 'red') {
+        by_level[level]++;
+      }
 
       const status = risk.response === 'Accept' ? 'closed' : 'open';
       by_status[status]++;
@@ -429,7 +431,7 @@ export async function getRiskSummary(
       likelihood: r.inherent_likelihood || 0,
       impact: r.inherent_impact || 0,
       score: r.inherent_score || 0,
-      level: computeRiskLevel(r.inherent_score || 0),
+      level: computeLevel(r.inherent_score || 0),
       status: r.response === 'Accept' ? 'closed' : 'open',
     })) || [];
 
@@ -456,7 +458,7 @@ export interface HeatmapResponse {
   };
   thresholds: {
     green_max: number;
-    amber_max: number;
+    orange_max: number;
     red_max: number;
   };
 }
@@ -477,15 +479,17 @@ export async function getRiskHeatmap(
     const likelihood = row.likelihood;
     const impact = row.impact;
     const count_total = row.count_total;
-    const score = computeRiskScore(likelihood, impact);
-    const level = computeRiskLevel(score);
+    const score = computeScore(likelihood, impact);
+    const level = computeLevel(score);
 
     const by_level: RiskSummaryByLevel = {
       green: 0,
-      amber: 0,
+      orange: 0,
       red: 0,
     };
-    by_level[level] = count_total;
+    if (level === 'green' || level === 'orange' || level === 'red') {
+      by_level[level] = count_total;
+    }
 
     return {
       likelihood,
@@ -503,7 +507,7 @@ export async function getRiskHeatmap(
     },
     thresholds: {
       green_max: 5,
-      amber_max: 12,
+      orange_max: 12,
       red_max: 25,
     },
   };

@@ -7,8 +7,8 @@ const app = createApp();
 
 const MOCK_API_KEY = process.env.APP_API_KEY || 'test-api-key';
 
-// Create mock chain for Supabase queries
-const createMockChain = () => {
+// Create mock chain for Supabase queries - hoisted to avoid initialization issues
+const createMockChain = vi.hoisted(() => () => {
   const chain: any = {
     from: vi.fn(() => chain),
     insert: vi.fn(() => ({ error: null })),
@@ -22,7 +22,7 @@ const createMockChain = () => {
     update: vi.fn(() => chain),
   };
   return chain;
-};
+});
 
 // Mock Supabase client
 vi.mock('../src/lib/supabaseClient', () => {

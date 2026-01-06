@@ -5,7 +5,7 @@ import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import * as taxRiskMatrixService from './taxRiskMatrix.service';
 import { ErrorCodes } from '../../constants/errorCodes';
-import { UpdateMatrixRequestSchema } from './taxRiskMatrix.schema';
+import { UpdateCellRequestSchema } from './taxRiskMatrix.schema';
 
 export const taxRiskMatrixRouter = Router({ mergeParams: true });
 
@@ -15,34 +15,20 @@ function getSupabase(req: any, accessToken: string) {
     : createSupabaseUserClient(accessToken);
 }
 
-function requireAdmin(req: any) {
-  if (req.user?.role !== 'admin') {
-    throw AppError.fromCode(ErrorCodes.AUTH_INSUFFICIENT_PERMISSIONS, 403);
-  }
-}
-
 /**
  * @openapi
- * /api/clients/{clientId}/tax/risk-matrix:
- *   get:
- *     summary: Get tax risk matrix
- *     description: Retrieve the tax risk matrix for a client with Excel-based cell ranges (B3:E8 and J14:N14). Returns matrix cells with colors for risk classification.
+ * /api/tax-risk-matrix/initialize:
+ *   post:
+ *     summary: Initialize tax risk matrix
+ *     description: Create default topics, dimensions, and matrix cells for a client. Idempotent operation.
  *     tags:
  *       - Tax Risk Matrix
  *     security:
  *       - ApiKeyAuth: []
  *         BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: clientId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Client ID
  *     responses:
  *       200:
- *         description: Tax risk matrix data
+ *         description: Matrix initialized successfully
  *         content:
  *           application/json:
  *             schema:
@@ -51,80 +37,32 @@ function requireAdmin(req: any) {
  *                 data:
  *                   type: object
  *                   properties:
- *                     client_id:
- *                       type: string
- *                       format: uuid
- *                     sections:
- *                       type: object
- *                       properties:
- *                         B3:E8:
- *                           type: object
- *                           properties:
- *                             rows:
- *                               type: integer
- *                               example: 6
- *                             cols:
- *                               type: integer
- *                               example: 4
- *                             cells:
- *                               type: array
- *                               items:
- *                                 type: object
- *                                 properties:
- *                                   row:
- *                                     type: integer
- *                                   col:
- *                                     type: integer
- *                                   value_text:
- *                                     type: string
- *                                   value_number:
- *                                     type: number
- *                                   color:
- *                                     type: string
- *                                     enum: [green, orange, red, none]
- *                         J14:N14:
- *                           type: object
- *                           properties:
- *                             rows:
- *                               type: integer
- *                               example: 1
- *                             cols:
- *                               type: integer
- *                               example: 5
- *                             cells:
- *                               type: array
- *                               items:
- *                                 type: object
- *                                 properties:
- *                                   row:
- *                                     type: integer
- *                                   col:
- *                                     type: integer
- *                                   value_text:
- *                                     type: string
- *                                   value_number:
- *                                     type: number
- *                                   color:
- *                                     type: string
- *                                     enum: [green, orange, red, none]
+ *                     topics_created:
+ *                       type: integer
+ *                       example: 8
+ *                     dimensions_created:
+ *                       type: integer
+ *                       example: 5
+ *                     cells_created:
+ *                       type: integer
+ *                       example: 40
+ *                     total_topics:
+ *                       type: integer
+ *                       example: 8
+ *                     total_dimensions:
+ *                       type: integer
+ *                       example: 5
+ *                     total_cells:
+ *                       type: integer
+ *                       example: 40
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
- *       403:
- *         $ref: '#/components/responses/ForbiddenError'
- *       422:
- *         $ref: '#/components/responses/ValidationError'
- *       429:
- *         $ref: '#/components/responses/RateLimitError'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-taxRiskMatrixRouter.get(
-  '/',
-  [param('clientId').isUUID().withMessage('Invalid clientId format')],
-  handleValidationErrors,
+taxRiskMatrixRouter.post(
+  '/initialize',
   asyncHandler(async (req: Request, res: Response) => {
-    const clientId = req.params.clientId;
-
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
 
@@ -132,9 +70,12 @@ taxRiskMatrixRouter.get(
       throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
-    const supabase = getSupabase(req, token);
+    if (!req.user?.client_id) {
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
+    }
 
-    const data = await taxRiskMatrixService.getMatrixForClient(supabase, clientId);
+    const supabase = getSupabase(req, token);
+    const data = await taxRiskMatrixService.initializeMatrix(supabase, req.user.client_id);
 
     res.json({ data });
   })
@@ -142,108 +83,18 @@ taxRiskMatrixRouter.get(
 
 /**
  * @openapi
- * /api/clients/{clientId}/tax/risk-matrix:
- *   put:
- *     summary: Update tax risk matrix
- *     description: Update the tax risk matrix for a client. Admin-only endpoint. Upserts cells by (client_id, section, row_index, col_index).
+ * /api/tax-risk-matrix:
+ *   get:
+ *     summary: Get tax risk matrix grid
+ *     description: Retrieve the complete tax risk matrix with topics, dimensions, and cells with computed scores and levels.
  *     tags:
  *       - Tax Risk Matrix
  *     security:
  *       - ApiKeyAuth: []
  *         BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: clientId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Client ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - sections
- *             properties:
- *               sections:
- *                 type: object
- *                 properties:
- *                   B3:E8:
- *                     type: object
- *                     required:
- *                       - rows
- *                       - cols
- *                       - cells
- *                     properties:
- *                       rows:
- *                         type: integer
- *                         example: 6
- *                       cols:
- *                         type: integer
- *                         example: 4
- *                       cells:
- *                         type: array
- *                         items:
- *                           type: object
- *                           required:
- *                             - row
- *                             - col
- *                             - color
- *                           properties:
- *                             row:
- *                               type: integer
- *                               minimum: 0
- *                             col:
- *                               type: integer
- *                               minimum: 0
- *                             value_text:
- *                               type: string
- *                             value_number:
- *                               type: number
- *                             color:
- *                               type: string
- *                               enum: [green, orange, red, none]
- *                   J14:N14:
- *                     type: object
- *                     required:
- *                       - rows
- *                       - cols
- *                       - cells
- *                     properties:
- *                       rows:
- *                         type: integer
- *                         example: 1
- *                       cols:
- *                         type: integer
- *                         example: 5
- *                       cells:
- *                         type: array
- *                         items:
- *                           type: object
- *                           required:
- *                             - row
- *                             - col
- *                             - color
- *                           properties:
- *                             row:
- *                               type: integer
- *                               minimum: 0
- *                             col:
- *                               type: integer
- *                               minimum: 0
- *                             value_text:
- *                               type: string
- *                             value_number:
- *                               type: number
- *                             color:
- *                               type: string
- *                               enum: [green, orange, red, none]
  *     responses:
  *       200:
- *         description: Matrix updated successfully
+ *         description: Tax risk matrix grid data
  *         content:
  *           application/json:
  *             schema:
@@ -252,28 +103,213 @@ taxRiskMatrixRouter.get(
  *                 data:
  *                   type: object
  *                   properties:
- *                     client_id:
- *                       type: string
- *                       format: uuid
- *                     sections:
- *                       type: object
+ *                     topics:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           name:
+ *                             type: string
+ *                           sort_order:
+ *                             type: integer
+ *                           is_active:
+ *                             type: boolean
+ *                     dimensions:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           name:
+ *                             type: string
+ *                           sort_order:
+ *                             type: integer
+ *                           is_active:
+ *                             type: boolean
+ *                     cells:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           topic_id:
+ *                             type: string
+ *                             format: uuid
+ *                           dimension_id:
+ *                             type: string
+ *                             format: uuid
+ *                           likelihood:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 5
+ *                           impact:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 5
+ *                           score:
+ *                             type: integer
+ *                             description: Computed as likelihood * impact
+ *                           level:
+ *                             type: string
+ *                             enum: [green, orange, red]
+ *                             description: Risk level based on score thresholds
+ *                           status:
+ *                             type: string
+ *                             enum: [open, in_progress, closed]
+ *                           notes:
+ *                             type: string
+ *                             nullable: true
+ *                           owner_user_id:
+ *                             type: string
+ *                             format: uuid
+ *                             nullable: true
+ *                           last_reviewed_at:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                           updated_at:
+ *                             type: string
+ *                             format: date-time
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
- *       403:
- *         $ref: '#/components/responses/ForbiddenError'
- *       422:
- *         $ref: '#/components/responses/ValidationError'
- *       429:
- *         $ref: '#/components/responses/RateLimitError'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-taxRiskMatrixRouter.put(
+taxRiskMatrixRouter.get(
   '/',
-  [param('clientId').isUUID().withMessage('Invalid clientId format')],
+  asyncHandler(async (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
+    }
+
+    if (!req.user?.client_id) {
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
+    }
+
+    const supabase = getSupabase(req, token);
+    const data = await taxRiskMatrixService.getMatrixGrid(supabase, req.user.client_id);
+
+    res.json({ data });
+  })
+);
+
+/**
+ * @openapi
+ * /api/tax-risk-matrix/cells/{cellId}:
+ *   patch:
+ *     summary: Update a tax risk matrix cell
+ *     description: Update specific fields of a matrix cell. Score and level are automatically recalculated.
+ *     tags:
+ *       - Tax Risk Matrix
+ *     security:
+ *       - ApiKeyAuth: []
+ *         BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: cellId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Cell ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               likelihood:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 5
+ *               impact:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 5
+ *               status:
+ *                 type: string
+ *                 enum: [open, in_progress, closed]
+ *               notes:
+ *                 type: string
+ *               owner_user_id:
+ *                 type: string
+ *                 format: uuid
+ *                 nullable: true
+ *               last_reviewed_at:
+ *                 type: string
+ *                 format: date-time
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Cell updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     topic_id:
+ *                       type: string
+ *                       format: uuid
+ *                     dimension_id:
+ *                       type: string
+ *                       format: uuid
+ *                     likelihood:
+ *                       type: integer
+ *                     impact:
+ *                       type: integer
+ *                     score:
+ *                       type: integer
+ *                     level:
+ *                       type: string
+ *                       enum: [green, orange, red]
+ *                     status:
+ *                       type: string
+ *                     notes:
+ *                       type: string
+ *                       nullable: true
+ *                     owner_user_id:
+ *                       type: string
+ *                       format: uuid
+ *                       nullable: true
+ *                     last_reviewed_at:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                     updated_at:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+taxRiskMatrixRouter.patch(
+  '/cells/:cellId',
+  [param('cellId').isUUID().withMessage('Invalid cellId format')],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
-    const clientId = req.params.clientId;
+    const cellId = req.params.cellId;
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
@@ -282,27 +318,24 @@ taxRiskMatrixRouter.put(
       throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
-    if (!req.user) {
+    if (!req.user?.client_id) {
       throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
-    requireAdmin(req);
-
-    const supabase = createSupabaseAdminClient();
-
-    const parseResult = UpdateMatrixRequestSchema.safeParse(req.body);
+    const parseResult = UpdateCellRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
       throw new AppError(
         `Invalid request body: ${parseResult.error.issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')}`,
-        400
+        422
       );
     }
 
-    const data = await taxRiskMatrixService.updateMatrixForClient(
+    const supabase = getSupabase(req, token);
+    const data = await taxRiskMatrixService.updateCell(
       supabase,
-      clientId,
-      parseResult.data,
-      req.user.sub
+      req.user.client_id,
+      cellId,
+      parseResult.data
     );
 
     res.json({ data });

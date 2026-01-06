@@ -79,7 +79,7 @@ create table public.tax_risk_matrix_entries (
   likelihood integer,            -- olasılık
   impact integer,                -- etki
   score integer,                 -- likelihood * impact
-  score_color text,              -- green / amber / red
+  score_color text,              -- green / orange / red
   matrix_row integer,
   matrix_col integer,
   created_at timestamptz not null default now(),
@@ -100,7 +100,7 @@ create table public.tax_risk_control_rows (
   inherent_likelihood integer,
   inherent_impact integer,
   inherent_score integer,
-  inherent_color text,             -- green / amber / red
+  inherent_color text,             -- green / orange / red
 
   control_required boolean,
   control_description text,
