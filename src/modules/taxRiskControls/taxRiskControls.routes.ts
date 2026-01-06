@@ -324,6 +324,244 @@ taxRiskControlsRouter.get(
 
 /**
  * @openapi
+ * /api/clients/{clientId}/tax/risk-controls/summary:
+ *   get:
+ *     summary: Get risk summary
+ *     description: Retrieve aggregated risk summary including total risks, counts by level and status, and top 5 open risks
+ *     tags:
+ *       - Tax Risk Controls
+ *     security:
+ *       - ApiKeyAuth: []
+ *         BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
+ *     responses:
+ *       200:
+ *         description: Risk summary data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total_risks:
+ *                       type: integer
+ *                       description: Total number of risks
+ *                     by_level:
+ *                       type: object
+ *                       properties:
+ *                         green:
+ *                           type: integer
+ *                         amber:
+ *                           type: integer
+ *                         red:
+ *                           type: integer
+ *                     by_status:
+ *                       type: object
+ *                       properties:
+ *                         open:
+ *                           type: integer
+ *                         closed:
+ *                           type: integer
+ *                     top_risks:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           title:
+ *                             type: string
+ *                           likelihood:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 5
+ *                           impact:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 5
+ *                           score:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 25
+ *                           level:
+ *                             type: string
+ *                             enum: [green, amber, red]
+ *                           status:
+ *                             type: string
+ *                             enum: [open, closed]
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+taxRiskControlsRouter.get(
+  '/summary',
+  [param('clientId').isUUID().withMessage('Invalid clientId format')],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId;
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
+    }
+
+    const supabase = getSupabase(req, token);
+
+    const data = await taxRiskControlsService.getRiskSummary(supabase, clientId);
+
+    res.json({ data });
+  })
+);
+
+/**
+ * @openapi
+ * /api/clients/{clientId}/tax/risk-controls/heatmap:
+ *   get:
+ *     summary: Get risk heatmap
+ *     description: Retrieve 5x5 risk heatmap aggregation by likelihood and impact with counts per cell
+ *     tags:
+ *       - Tax Risk Controls
+ *     security:
+ *       - ApiKeyAuth: []
+ *         BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
+ *     responses:
+ *       200:
+ *         description: Risk heatmap data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     cells:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           likelihood:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 5
+ *                           impact:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 5
+ *                           count_total:
+ *                             type: integer
+ *                           by_level:
+ *                             type: object
+ *                             properties:
+ *                               green:
+ *                                 type: integer
+ *                               amber:
+ *                                 type: integer
+ *                               red:
+ *                                 type: integer
+ *                     axes:
+ *                       type: object
+ *                       properties:
+ *                         likelihood:
+ *                           type: object
+ *                           properties:
+ *                             min:
+ *                               type: integer
+ *                             max:
+ *                               type: integer
+ *                         impact:
+ *                           type: object
+ *                           properties:
+ *                             min:
+ *                               type: integer
+ *                             max:
+ *                               type: integer
+ *                     thresholds:
+ *                       type: object
+ *                       properties:
+ *                         green:
+ *                           type: object
+ *                           properties:
+ *                             min:
+ *                               type: integer
+ *                             max:
+ *                               type: integer
+ *                         amber:
+ *                           type: object
+ *                           properties:
+ *                             min:
+ *                               type: integer
+ *                             max:
+ *                               type: integer
+ *                         red:
+ *                           type: object
+ *                           properties:
+ *                             min:
+ *                               type: integer
+ *                             max:
+ *                               type: integer
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+taxRiskControlsRouter.get(
+  '/heatmap',
+  [param('clientId').isUUID().withMessage('Invalid clientId format')],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId;
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
+    }
+
+    const supabase = getSupabase(req, token);
+
+    const data = await taxRiskControlsService.getRiskHeatmap(supabase, clientId);
+
+    res.json({ data });
+  })
+);
+
+/**
+ * @openapi
  * /api/clients/{clientId}/tax/risk-controls/{id}:
  *   get:
  *     summary: Get risk control by ID

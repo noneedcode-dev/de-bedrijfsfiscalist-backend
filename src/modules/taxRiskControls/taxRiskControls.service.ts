@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../../middleware/errorHandler';
 import { AuthUser } from '../../types/express';
+import { computeRiskScore, computeRiskLevel, RiskLevel } from '../../utils/riskScore';
 
 export interface RiskScore {
   score: number;
@@ -8,18 +9,8 @@ export interface RiskScore {
 }
 
 export function computeRisk(chance: number | null, impact: number | null): RiskScore {
-  if (chance === null || impact === null) {
-    return { score: 0, color: 'green' };
-  }
-
-  const score = chance * impact;
-  let color = 'green';
-  if (score >= 15) {
-    color = 'red';
-  } else if (score >= 7) {
-    color = 'amber';
-  }
-
+  const score = computeRiskScore(chance, impact);
+  const color = computeRiskLevel(score);
   return { score, color };
 }
 
@@ -361,4 +352,168 @@ export async function deleteRiskControl(
   if (error) {
     throw new AppError(`Failed to delete risk control: ${error.message}`, 500);
   }
+}
+
+export interface RiskSummaryByLevel {
+  green: number;
+  amber: number;
+  red: number;
+}
+
+export interface RiskSummaryByStatus {
+  open: number;
+  closed: number;
+}
+
+export interface TopRisk {
+  id: string;
+  title: string;
+  likelihood: number;
+  impact: number;
+  score: number;
+  level: RiskLevel;
+  status: string;
+}
+
+export interface RiskSummaryResponse {
+  total_risks: number;
+  by_level: RiskSummaryByLevel;
+  by_status: RiskSummaryByStatus;
+  top_risks: TopRisk[];
+}
+
+export async function getRiskSummary(
+  supabase: SupabaseClient,
+  clientId: string
+): Promise<RiskSummaryResponse> {
+  const { data: risks, error } = await supabase
+    .from('tax_risk_control_rows')
+    .select('id, risk_description, inherent_likelihood, inherent_impact, inherent_score, inherent_color, response')
+    .eq('client_id', clientId);
+
+  if (error) {
+    throw new AppError(`Failed to fetch risk summary: ${error.message}`, 500);
+  }
+
+  const total_risks = risks?.length || 0;
+
+  const by_level: RiskSummaryByLevel = {
+    green: 0,
+    amber: 0,
+    red: 0,
+  };
+
+  const by_status: RiskSummaryByStatus = {
+    open: 0,
+    closed: 0,
+  };
+
+  if (risks) {
+    for (const risk of risks) {
+      const score = risk.inherent_score || 0;
+      const level = computeRiskLevel(score);
+      by_level[level]++;
+
+      const status = risk.response === 'Accept' ? 'closed' : 'open';
+      by_status[status]++;
+    }
+  }
+
+  const topRisksData = risks
+    ?.filter((r) => r.response !== 'Accept')
+    .sort((a, b) => (b.inherent_score || 0) - (a.inherent_score || 0))
+    .slice(0, 5)
+    .map((r) => ({
+      id: r.id,
+      title: r.risk_description || '',
+      likelihood: r.inherent_likelihood || 0,
+      impact: r.inherent_impact || 0,
+      score: r.inherent_score || 0,
+      level: computeRiskLevel(r.inherent_score || 0),
+      status: r.response === 'Accept' ? 'closed' : 'open',
+    })) || [];
+
+  return {
+    total_risks,
+    by_level,
+    by_status,
+    top_risks: topRisksData,
+  };
+}
+
+export interface HeatmapCell {
+  likelihood: number;
+  impact: number;
+  count_total: number;
+  by_level: RiskSummaryByLevel;
+}
+
+export interface HeatmapResponse {
+  cells: HeatmapCell[];
+  axes: {
+    likelihood: { min: number; max: number };
+    impact: { min: number; max: number };
+  };
+  thresholds: {
+    green: { min: number; max: number };
+    amber: { min: number; max: number };
+    red: { min: number; max: number };
+  };
+}
+
+export async function getRiskHeatmap(
+  supabase: SupabaseClient,
+  clientId: string
+): Promise<HeatmapResponse> {
+  const { data: risks, error } = await supabase
+    .from('tax_risk_control_rows')
+    .select('inherent_likelihood, inherent_impact, inherent_score')
+    .eq('client_id', clientId)
+    .not('inherent_likelihood', 'is', null)
+    .not('inherent_impact', 'is', null);
+
+  if (error) {
+    throw new AppError(`Failed to fetch risk heatmap: ${error.message}`, 500);
+  }
+
+  const cellMap = new Map<string, HeatmapCell>();
+
+  if (risks) {
+    for (const risk of risks) {
+      const likelihood = risk.inherent_likelihood!;
+      const impact = risk.inherent_impact!;
+      const key = `${likelihood}-${impact}`;
+
+      if (!cellMap.has(key)) {
+        cellMap.set(key, {
+          likelihood,
+          impact,
+          count_total: 0,
+          by_level: { green: 0, amber: 0, red: 0 },
+        });
+      }
+
+      const cell = cellMap.get(key)!;
+      cell.count_total++;
+
+      const score = risk.inherent_score || computeRiskScore(likelihood, impact);
+      const level = computeRiskLevel(score);
+      cell.by_level[level]++;
+    }
+  }
+
+  const cells = Array.from(cellMap.values()).filter((cell) => cell.count_total > 0);
+
+  return {
+    cells,
+    axes: {
+      likelihood: { min: 1, max: 5 },
+      impact: { min: 1, max: 5 },
+    },
+    thresholds: {
+      green: { min: 1, max: 5 },
+      amber: { min: 6, max: 12 },
+      red: { min: 13, max: 25 },
+    },
+  };
 }
