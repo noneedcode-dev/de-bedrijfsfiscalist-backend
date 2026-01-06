@@ -451,13 +451,13 @@ export interface HeatmapCell {
 export interface HeatmapResponse {
   cells: HeatmapCell[];
   axes: {
-    likelihood: { min: number; max: number };
-    impact: { min: number; max: number };
+    likelihood: number[];
+    impact: number[];
   };
   thresholds: {
-    green: { min: number; max: number };
-    amber: { min: number; max: number };
-    red: { min: number; max: number };
+    green_max: number;
+    amber_max: number;
+    red_max: number;
   };
 }
 
@@ -465,55 +465,46 @@ export async function getRiskHeatmap(
   supabase: SupabaseClient,
   clientId: string
 ): Promise<HeatmapResponse> {
-  const { data: risks, error } = await supabase
-    .from('tax_risk_control_rows')
-    .select('inherent_likelihood, inherent_impact, inherent_score')
-    .eq('client_id', clientId)
-    .not('inherent_likelihood', 'is', null)
-    .not('inherent_impact', 'is', null);
+  const { data: aggregatedData, error } = await supabase.rpc('get_risk_heatmap_aggregation', {
+    p_client_id: clientId,
+  });
 
   if (error) {
     throw new AppError(`Failed to fetch risk heatmap: ${error.message}`, 500);
   }
 
-  const cellMap = new Map<string, HeatmapCell>();
+  const cells: HeatmapCell[] = (aggregatedData || []).map((row: any) => {
+    const likelihood = row.likelihood;
+    const impact = row.impact;
+    const count_total = row.count_total;
+    const score = computeRiskScore(likelihood, impact);
+    const level = computeRiskLevel(score);
 
-  if (risks) {
-    for (const risk of risks) {
-      const likelihood = risk.inherent_likelihood!;
-      const impact = risk.inherent_impact!;
-      const key = `${likelihood}-${impact}`;
+    const by_level: RiskSummaryByLevel = {
+      green: 0,
+      amber: 0,
+      red: 0,
+    };
+    by_level[level] = count_total;
 
-      if (!cellMap.has(key)) {
-        cellMap.set(key, {
-          likelihood,
-          impact,
-          count_total: 0,
-          by_level: { green: 0, amber: 0, red: 0 },
-        });
-      }
-
-      const cell = cellMap.get(key)!;
-      cell.count_total++;
-
-      const score = risk.inherent_score || computeRiskScore(likelihood, impact);
-      const level = computeRiskLevel(score);
-      cell.by_level[level]++;
-    }
-  }
-
-  const cells = Array.from(cellMap.values()).filter((cell) => cell.count_total > 0);
+    return {
+      likelihood,
+      impact,
+      count_total,
+      by_level,
+    };
+  });
 
   return {
     cells,
     axes: {
-      likelihood: { min: 1, max: 5 },
-      impact: { min: 1, max: 5 },
+      likelihood: [1, 2, 3, 4, 5],
+      impact: [1, 2, 3, 4, 5],
     },
     thresholds: {
-      green: { min: 1, max: 5 },
-      amber: { min: 6, max: 12 },
-      red: { min: 13, max: 25 },
+      green_max: 5,
+      amber_max: 12,
+      red_max: 25,
     },
   };
 }

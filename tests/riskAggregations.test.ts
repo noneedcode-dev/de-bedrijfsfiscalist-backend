@@ -312,7 +312,9 @@ describe('Risk Aggregations API', () => {
     it('should return correct response structure', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
-      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ data: [], error: null })
+      };
       vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
       
       const res = await request(app)
@@ -328,28 +330,29 @@ describe('Risk Aggregations API', () => {
       
       expect(Array.isArray(res.body.data.cells)).toBe(true);
       expect(res.body.data.axes).toEqual({
-        likelihood: { min: 1, max: 5 },
-        impact: { min: 1, max: 5 }
+        likelihood: [1, 2, 3, 4, 5],
+        impact: [1, 2, 3, 4, 5]
       });
       expect(res.body.data.thresholds).toEqual({
-        green: { min: 1, max: 5 },
-        amber: { min: 6, max: 12 },
-        red: { min: 13, max: 25 }
+        green_max: 5,
+        amber_max: 12,
+        red_max: 25
       });
     });
 
     it('should aggregate risks by likelihood and impact', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
-      const mockSupabase = createMockQueryBuilder({
-        data: [
-          { inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9 },
-          { inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9 },
-          { inherent_likelihood: 4, inherent_impact: 5, inherent_score: 20 },
-          { inherent_likelihood: 1, inherent_impact: 2, inherent_score: 2 },
-        ],
-        error: null
-      });
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({
+          data: [
+            { likelihood: 3, impact: 3, count_total: 2 },
+            { likelihood: 4, impact: 5, count_total: 1 },
+            { likelihood: 1, impact: 2, count_total: 1 },
+          ],
+          error: null
+        })
+      };
       vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
       
       const res = await request(app)
@@ -376,17 +379,16 @@ describe('Risk Aggregations API', () => {
     it('should correctly classify cell counts by level', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
-      const mockSupabase = createMockQueryBuilder({
-        data: [
-          { inherent_likelihood: 2, inherent_impact: 2, inherent_score: 4 },
-          { inherent_likelihood: 2, inherent_impact: 2, inherent_score: 4 },
-          { inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9 },
-          { inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9 },
-          { inherent_likelihood: 3, inherent_impact: 3, inherent_score: 9 },
-          { inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25 },
-        ],
-        error: null
-      });
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({
+          data: [
+            { likelihood: 2, impact: 2, count_total: 2 },
+            { likelihood: 3, impact: 3, count_total: 3 },
+            { likelihood: 5, impact: 5, count_total: 1 },
+          ],
+          error: null
+        })
+      };
       vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
       
       const res = await request(app)
@@ -415,13 +417,15 @@ describe('Risk Aggregations API', () => {
     it('should only return cells with count_total > 0', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
-      const mockSupabase = createMockQueryBuilder({
-        data: [
-          { inherent_likelihood: 1, inherent_impact: 1, inherent_score: 1 },
-          { inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25 },
-        ],
-        error: null
-      });
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({
+          data: [
+            { likelihood: 1, impact: 1, count_total: 1 },
+            { likelihood: 5, impact: 5, count_total: 1 },
+          ],
+          error: null
+        })
+      };
       vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
       
       const res = await request(app)
@@ -456,7 +460,9 @@ describe('Risk Aggregations API', () => {
         role: 'admin'
       });
       
-      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ data: [], error: null })
+      };
       vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
       
       const res = await request(app)
@@ -498,6 +504,42 @@ describe('Risk Aggregations API', () => {
       expect(summaryRes.body.data.top_risks[1].score).toBe(6);
       expect(summaryRes.body.data.top_risks[2].level).toBe('green');
       expect(summaryRes.body.data.top_risks[2].score).toBe(3);
+    });
+
+    it('should correctly classify (1,5)=green, (3,4)=amber, (5,5)=red', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = createMockQueryBuilder({
+        data: [
+          { id: '1', risk_description: 'Risk 1', inherent_likelihood: 1, inherent_impact: 5, inherent_score: 5, inherent_color: 'green', response: 'Monitor' },
+          { id: '2', risk_description: 'Risk 2', inherent_likelihood: 3, inherent_impact: 4, inherent_score: 12, inherent_color: 'amber', response: 'Monitor' },
+          { id: '3', risk_description: 'Risk 3', inherent_likelihood: 5, inherent_impact: 5, inherent_score: 25, inherent_color: 'red', response: 'Mitigate' },
+        ],
+        error: null
+      });
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/summary`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.data.by_level.green).toBe(1);
+      expect(res.body.data.by_level.amber).toBe(1);
+      expect(res.body.data.by_level.red).toBe(1);
+      
+      const risk1 = res.body.data.top_risks.find((r: any) => r.id === '1');
+      expect(risk1.score).toBe(5);
+      expect(risk1.level).toBe('green');
+      
+      const risk2 = res.body.data.top_risks.find((r: any) => r.id === '2');
+      expect(risk2.score).toBe(12);
+      expect(risk2.level).toBe('amber');
+      
+      const risk3 = res.body.data.top_risks.find((r: any) => r.id === '3');
+      expect(risk3.score).toBe(25);
+      expect(risk3.level).toBe('red');
     });
   });
 });

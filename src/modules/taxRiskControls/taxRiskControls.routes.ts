@@ -490,43 +490,27 @@ taxRiskControlsRouter.get(
  *                       type: object
  *                       properties:
  *                         likelihood:
- *                           type: object
- *                           properties:
- *                             min:
- *                               type: integer
- *                             max:
- *                               type: integer
+ *                           type: array
+ *                           items:
+ *                             type: integer
+ *                           example: [1, 2, 3, 4, 5]
  *                         impact:
- *                           type: object
- *                           properties:
- *                             min:
- *                               type: integer
- *                             max:
- *                               type: integer
+ *                           type: array
+ *                           items:
+ *                             type: integer
+ *                           example: [1, 2, 3, 4, 5]
  *                     thresholds:
  *                       type: object
  *                       properties:
- *                         green:
- *                           type: object
- *                           properties:
- *                             min:
- *                               type: integer
- *                             max:
- *                               type: integer
- *                         amber:
- *                           type: object
- *                           properties:
- *                             min:
- *                               type: integer
- *                             max:
- *                               type: integer
- *                         red:
- *                           type: object
- *                           properties:
- *                             min:
- *                               type: integer
- *                             max:
- *                               type: integer
+ *                         green_max:
+ *                           type: integer
+ *                           example: 5
+ *                         amber_max:
+ *                           type: integer
+ *                           example: 12
+ *                         red_max:
+ *                           type: integer
+ *                           example: 25
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:

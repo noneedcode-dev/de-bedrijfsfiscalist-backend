@@ -42,9 +42,9 @@ CREATE POLICY "Users can view their company audit logs"
   FOR SELECT
   USING (
     client_id IN (
-      SELECT company_id 
+      SELECT client_id 
       FROM app_users 
-      WHERE user_id = auth.uid()
+      WHERE id = (auth.jwt() ->> 'sub')::uuid
     )
   );
 
@@ -56,7 +56,7 @@ CREATE POLICY "Admins can view all audit logs"
     EXISTS (
       SELECT 1 
       FROM app_users 
-      WHERE user_id = auth.uid() 
+      WHERE id = (auth.jwt() ->> 'sub')::uuid
       AND role = 'admin'
     )
   );
