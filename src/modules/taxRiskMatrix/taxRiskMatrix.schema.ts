@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const RiskLevelEnum = z.enum(['green', 'orange', 'red']);
-export type RiskLevel = z.infer<typeof RiskLevelEnum>;
+export const RiskColorEnum = z.enum(['green', 'orange', 'red']);
+export type RiskColor = z.infer<typeof RiskColorEnum>;
 
 export const StatusEnum = z.enum(['open', 'in_progress', 'closed']);
 export type Status = z.infer<typeof StatusEnum>;

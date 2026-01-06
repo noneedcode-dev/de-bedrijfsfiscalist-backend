@@ -17,7 +17,7 @@ function getSupabase(req: any, accessToken: string) {
 
 /**
  * @openapi
- * /api/tax-risk-matrix/initialize:
+ * /api/clients/{clientId}/tax/risk-matrix/initialize:
  *   post:
  *     summary: Initialize tax risk matrix
  *     description: Create default topics, dimensions, and matrix cells for a client. Idempotent operation.
@@ -26,6 +26,14 @@ function getSupabase(req: any, accessToken: string) {
  *     security:
  *       - ApiKeyAuth: []
  *         BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
  *     responses:
  *       200:
  *         description: Matrix initialized successfully
@@ -63,6 +71,7 @@ function getSupabase(req: any, accessToken: string) {
 taxRiskMatrixRouter.post(
   '/initialize',
   asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId;
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
 
@@ -70,12 +79,8 @@ taxRiskMatrixRouter.post(
       throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
-    if (!req.user?.client_id) {
-      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
-    }
-
     const supabase = getSupabase(req, token);
-    const data = await taxRiskMatrixService.initializeMatrix(supabase, req.user.client_id);
+    const data = await taxRiskMatrixService.initializeMatrix(supabase, clientId);
 
     res.json({ data });
   })
@@ -83,15 +88,23 @@ taxRiskMatrixRouter.post(
 
 /**
  * @openapi
- * /api/tax-risk-matrix:
+ * /api/clients/{clientId}/tax/risk-matrix:
  *   get:
  *     summary: Get tax risk matrix grid
- *     description: Retrieve the complete tax risk matrix with topics, dimensions, and cells with computed scores and levels.
+ *     description: Retrieve the complete tax risk matrix with topics, dimensions, and cells with computed scores and colors.
  *     tags:
  *       - Tax Risk Matrix
  *     security:
  *       - ApiKeyAuth: []
  *         BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
  *     responses:
  *       200:
  *         description: Tax risk matrix grid data
@@ -156,10 +169,10 @@ taxRiskMatrixRouter.post(
  *                           score:
  *                             type: integer
  *                             description: Computed as likelihood * impact
- *                           level:
+ *                           color:
  *                             type: string
  *                             enum: [green, orange, red]
- *                             description: Risk level based on score thresholds
+ *                             description: Risk color based on score thresholds
  *                           status:
  *                             type: string
  *                             enum: [open, in_progress, closed]
@@ -185,6 +198,7 @@ taxRiskMatrixRouter.post(
 taxRiskMatrixRouter.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId;
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
 
@@ -192,12 +206,8 @@ taxRiskMatrixRouter.get(
       throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
-    if (!req.user?.client_id) {
-      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
-    }
-
     const supabase = getSupabase(req, token);
-    const data = await taxRiskMatrixService.getMatrixGrid(supabase, req.user.client_id);
+    const data = await taxRiskMatrixService.getMatrixGrid(supabase, clientId);
 
     res.json({ data });
   })
@@ -205,16 +215,23 @@ taxRiskMatrixRouter.get(
 
 /**
  * @openapi
- * /api/tax-risk-matrix/cells/{cellId}:
+ * /api/clients/{clientId}/tax/risk-matrix/cells/{cellId}:
  *   patch:
  *     summary: Update a tax risk matrix cell
- *     description: Update specific fields of a matrix cell. Score and level are automatically recalculated.
+ *     description: Update specific fields of a matrix cell. Score and color are automatically recalculated.
  *     tags:
  *       - Tax Risk Matrix
  *     security:
  *       - ApiKeyAuth: []
  *         BearerAuth: []
  *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
  *       - in: path
  *         name: cellId
  *         required: true
@@ -276,7 +293,7 @@ taxRiskMatrixRouter.get(
  *                       type: integer
  *                     score:
  *                       type: integer
- *                     level:
+ *                     color:
  *                       type: string
  *                       enum: [green, orange, red]
  *                     status:
@@ -309,16 +326,13 @@ taxRiskMatrixRouter.patch(
   [param('cellId').isUUID().withMessage('Invalid cellId format')],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId;
     const cellId = req.params.cellId;
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
-      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
-    }
-
-    if (!req.user?.client_id) {
       throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
     }
 
@@ -333,7 +347,7 @@ taxRiskMatrixRouter.patch(
     const supabase = getSupabase(req, token);
     const data = await taxRiskMatrixService.updateCell(
       supabase,
-      req.user.client_id,
+      clientId,
       cellId,
       parseResult.data
     );

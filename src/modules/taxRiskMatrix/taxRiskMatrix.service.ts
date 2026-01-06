@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../../middleware/errorHandler';
 import { UpdateCellRequest } from './taxRiskMatrix.schema';
-import { computeScore, computeLevel } from '../../shared/riskScoring';
+import { computeScore, computeColor } from '../../shared/riskScoring';
 import {
   MatrixGridResponse,
   InitializeResponse,
@@ -205,7 +205,7 @@ export async function getMatrixGrid(
 
   const cells: MatrixCell[] = cellsData.map((c: any) => {
     const score = computeScore(c.likelihood, c.impact);
-    const level = computeLevel(score);
+    const color = computeColor(c.likelihood, c.impact);
     return {
       id: c.id,
       topic_id: c.topic_id,
@@ -213,7 +213,7 @@ export async function getMatrixGrid(
       likelihood: c.likelihood,
       impact: c.impact,
       score,
-      level,
+      color,
       status: c.status,
       notes: c.notes,
       owner_user_id: c.owner_user_id,
@@ -282,7 +282,7 @@ export async function updateCell(
   }
 
   const score = computeScore(updatedCell.likelihood, updatedCell.impact);
-  const level = computeLevel(score);
+  const color = computeColor(updatedCell.likelihood, updatedCell.impact);
 
   return {
     id: updatedCell.id,
@@ -291,7 +291,7 @@ export async function updateCell(
     likelihood: updatedCell.likelihood,
     impact: updatedCell.impact,
     score,
-    level,
+    color,
     status: updatedCell.status,
     notes: updatedCell.notes,
     owner_user_id: updatedCell.owner_user_id,

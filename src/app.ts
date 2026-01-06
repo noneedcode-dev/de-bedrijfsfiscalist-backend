@@ -82,14 +82,12 @@ export function createApp() {
   app.use('/api/admin/users/invite', invitationLimiter);
   app.use('/api/admin', authenticateJWT, adminRouter);
 
-  // Tax Risk Matrix routes: /api/tax-risk-matrix/* (requires JWT, uses client_id from token)
-  app.use('/api/tax-risk-matrix', authenticateJWT, taxRiskMatrixRouter);
-
   // Client-scoped routes: require JWT + client access validation
   const clientRouter = express.Router({ mergeParams: true });
 
   clientRouter.use('/tax/calendar', taxCalendarRouter);
   clientRouter.use('/tax/risk-controls', taxRiskControlsRouter);
+  clientRouter.use('/tax/risk-matrix', taxRiskMatrixRouter);
   clientRouter.use('/tax/function', taxFunctionRouter);
   clientRouter.use('/documents', documentsRouter);
 

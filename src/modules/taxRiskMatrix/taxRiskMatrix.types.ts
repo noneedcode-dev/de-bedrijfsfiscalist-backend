@@ -19,7 +19,7 @@ export interface MatrixCell {
   likelihood: number;
   impact: number;
   score: number;
-  level: 'green' | 'orange' | 'red';
+  color: 'green' | 'orange' | 'red';
   status: 'open' | 'in_progress' | 'closed';
   notes: string | null;
   owner_user_id: string | null;

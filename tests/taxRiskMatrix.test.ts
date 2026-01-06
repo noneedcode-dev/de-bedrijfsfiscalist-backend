@@ -40,9 +40,9 @@ describe('Tax Risk Matrix API', () => {
     vi.clearAllMocks();
   });
 
-  describe('POST /api/tax-risk-matrix/initialize', () => {
+  describe('POST /api/clients/:clientId/tax/risk-matrix/initialize', () => {
     it('should require API key', async () => {
-      const res = await request(app).post('/api/tax-risk-matrix/initialize');
+      const res = await request(app).post(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/initialize`);
 
       expect(res.status).toBe(401);
       expect(res.body.code).toBeTruthy();
@@ -50,22 +50,26 @@ describe('Tax Risk Matrix API', () => {
 
     it('should require JWT', async () => {
       const res = await request(app)
-        .post('/api/tax-risk-matrix/initialize')
+        .post(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/initialize`)
         .set('x-api-key', MOCK_API_KEY);
 
       expect(res.status).toBe(401);
       expect(res.body.code).toBeTruthy();
     });
 
-    it('should require client_id in token', async () => {
-      const tokenWithoutClientId = generateToken({ sub: MOCK_USER_ID, role: 'client' });
+    it('should validate clientId access', async () => {
+      const clientToken = generateToken({ 
+        sub: MOCK_USER_ID, 
+        role: 'client',
+        client_id: MOCK_CLIENT_ID 
+      });
 
       const res = await request(app)
-        .post('/api/tax-risk-matrix/initialize')
+        .post('/api/clients/invalid-uuid/tax/risk-matrix/initialize')
         .set('x-api-key', MOCK_API_KEY)
-        .set('Authorization', `Bearer ${tokenWithoutClientId}`);
+        .set('Authorization', `Bearer ${clientToken}`);
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
     });
 
     it.skip('should initialize matrix with default topics and dimensions (requires real DB)', async () => {
@@ -81,9 +85,9 @@ describe('Tax Risk Matrix API', () => {
     });
   });
 
-  describe('GET /api/tax-risk-matrix', () => {
+  describe('GET /api/clients/:clientId/tax/risk-matrix', () => {
     it('should require API key', async () => {
-      const res = await request(app).get('/api/tax-risk-matrix');
+      const res = await request(app).get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix`);
 
       expect(res.status).toBe(401);
       expect(res.body.code).toBeTruthy();
@@ -91,7 +95,7 @@ describe('Tax Risk Matrix API', () => {
 
     it('should require JWT', async () => {
       const res = await request(app)
-        .get('/api/tax-risk-matrix')
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix`)
         .set('x-api-key', MOCK_API_KEY);
 
       expect(res.status).toBe(401);
@@ -147,7 +151,7 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .get('/api/tax-risk-matrix')
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`);
 
@@ -166,9 +170,9 @@ describe('Tax Risk Matrix API', () => {
       expect(cell).toHaveProperty('likelihood');
       expect(cell).toHaveProperty('impact');
       expect(cell).toHaveProperty('score');
-      expect(cell).toHaveProperty('level');
+      expect(cell).toHaveProperty('color');
       expect(cell.score).toBe(12);
-      expect(cell.level).toBe('orange');
+      expect(cell.color).toBe('orange');
     });
 
     it('should ensure no amber in responses - only green/orange/red', async () => {
@@ -210,7 +214,7 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .get('/api/tax-risk-matrix')
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`);
 
@@ -220,7 +224,7 @@ describe('Tax Risk Matrix API', () => {
       
       if (res.body.data.cells.length > 0) {
         res.body.data.cells.forEach((cell: any) => {
-          expect(['green', 'orange', 'red']).toContain(cell.level);
+          expect(['green', 'orange', 'red']).toContain(cell.color);
         });
       }
     });
@@ -260,7 +264,7 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .get('/api/tax-risk-matrix')
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`);
 
@@ -272,9 +276,9 @@ describe('Tax Risk Matrix API', () => {
     });
   });
 
-  describe('PATCH /api/tax-risk-matrix/cells/:cellId', () => {
+  describe('PATCH /api/clients/:clientId/tax/risk-matrix/cells/:cellId', () => {
     it('should require API key', async () => {
-      const res = await request(app).patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`);
+      const res = await request(app).patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`);
 
       expect(res.status).toBe(401);
       expect(res.body.code).toBeTruthy();
@@ -282,7 +286,7 @@ describe('Tax Risk Matrix API', () => {
 
     it('should require JWT', async () => {
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY);
 
       expect(res.status).toBe(401);
@@ -297,7 +301,7 @@ describe('Tax Risk Matrix API', () => {
       });
 
       const res = await request(app)
-        .patch('/api/tax-risk-matrix/cells/invalid-uuid')
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/invalid-uuid`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ likelihood: 3 });
@@ -356,14 +360,14 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ impact: 5 });
 
       expect(res.status).toBe(200);
       expect(res.body.data.score).toBe(5);
-      expect(res.body.data.level).toBe('green');
+      expect(res.body.data.color).toBe('green');
     });
 
     it('should update cell and recalculate score/level - orange boundary (score 12)', async () => {
@@ -417,14 +421,14 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ impact: 4 });
 
       expect(res.status).toBe(200);
       expect(res.body.data.score).toBe(12);
-      expect(res.body.data.level).toBe('orange');
+      expect(res.body.data.color).toBe('orange');
     });
 
     it('should update cell and recalculate score/level - red boundary (score 25)', async () => {
@@ -478,14 +482,14 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ impact: 5 });
 
       expect(res.status).toBe(200);
       expect(res.body.data.score).toBe(25);
-      expect(res.body.data.level).toBe('red');
+      expect(res.body.data.color).toBe('red');
     });
 
     it('should validate likelihood range 1-5', async () => {
@@ -496,7 +500,7 @@ describe('Tax Risk Matrix API', () => {
       });
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ likelihood: 6 });
@@ -512,7 +516,7 @@ describe('Tax Risk Matrix API', () => {
       });
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ impact: 0 });
@@ -528,7 +532,7 @@ describe('Tax Risk Matrix API', () => {
       });
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ status: 'invalid_status' });
@@ -587,7 +591,7 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({
@@ -603,7 +607,7 @@ describe('Tax Risk Matrix API', () => {
       expect(res.body.data.likelihood).toBe(4);
       expect(res.body.data.impact).toBe(3);
       expect(res.body.data.score).toBe(12);
-      expect(res.body.data.level).toBe('orange');
+      expect(res.body.data.color).toBe('orange');
       expect(res.body.data.status).toBe('in_progress');
       expect(res.body.data.notes).toBe('Test notes');
     });
@@ -625,7 +629,7 @@ describe('Tax Risk Matrix API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
-        .patch(`/api/tax-risk-matrix/cells/${MOCK_CELL_ID}`)
+        .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-matrix/cells/${MOCK_CELL_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`)
         .send({ likelihood: 3 });
