@@ -446,8 +446,9 @@ export async function getRiskSummary(
 export interface HeatmapCell {
   likelihood: number;
   impact: number;
+  score: number;
+  level: RiskLevel;
   count_total: number;
-  by_level: RiskSummaryByLevel;
 }
 
 export interface HeatmapResponse {
@@ -465,7 +466,8 @@ export interface HeatmapResponse {
 
 export async function getRiskHeatmap(
   supabase: SupabaseClient,
-  clientId: string
+  clientId: string,
+  compact: boolean = false
 ): Promise<HeatmapResponse> {
   const { data: aggregatedData, error } = await supabase.rpc('get_risk_heatmap_aggregation', {
     p_client_id: clientId,
@@ -475,29 +477,40 @@ export async function getRiskHeatmap(
     throw new AppError(`Failed to fetch risk heatmap: ${error.message}`, 500);
   }
 
-  const cells: HeatmapCell[] = (aggregatedData || []).map((row: any) => {
-    const likelihood = row.likelihood;
-    const impact = row.impact;
-    const count_total = row.count_total;
-    const score = computeScore(likelihood, impact);
-    const level = computeLevel(score);
-
-    const by_level: RiskSummaryByLevel = {
-      green: 0,
-      orange: 0,
-      red: 0,
-    };
-    if (level === 'green' || level === 'orange' || level === 'red') {
-      by_level[level] = count_total;
+  // Build a map from RPC results for quick lookup
+  const rpcMap = new Map<string, number>();
+  if (aggregatedData) {
+    for (const row of aggregatedData) {
+      const likelihood = Number(row.likelihood);
+      const impact = Number(row.impact);
+      const count_total = Number(row.count_total);
+      const key = `${likelihood}:${impact}`;
+      rpcMap.set(key, count_total);
     }
+  }
 
-    return {
-      likelihood,
-      impact,
-      count_total,
-      by_level,
-    };
-  });
+  // Build full 25-cell template
+  // Order: impact DESC (5→1), likelihood ASC (1→5)
+  const allCells: HeatmapCell[] = [];
+  for (let impact = 5; impact >= 1; impact--) {
+    for (let likelihood = 1; likelihood <= 5; likelihood++) {
+      const key = `${likelihood}:${impact}`;
+      const count_total = rpcMap.get(key) || 0;
+      const score = computeScore(likelihood, impact);
+      const level = computeLevel(score);
+
+      allCells.push({
+        likelihood,
+        impact,
+        score,
+        level,
+        count_total,
+      });
+    }
+  }
+
+  // Apply compact filter if requested
+  const cells = compact ? allCells.filter(cell => cell.count_total > 0) : allCells;
 
   return {
     cells,

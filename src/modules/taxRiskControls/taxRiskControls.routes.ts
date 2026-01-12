@@ -437,7 +437,7 @@ taxRiskControlsRouter.get(
  * /api/clients/{clientId}/tax/risk-controls/heatmap:
  *   get:
  *     summary: Get risk heatmap
- *     description: Retrieve 5x5 risk heatmap aggregation by likelihood and impact with counts per cell
+ *     description: Retrieve 5x5 risk heatmap aggregation by likelihood and impact. Returns all 25 cells by default with score, level, and counts. Use compact=true to return only non-zero cells.
  *     tags:
  *       - Tax Risk Controls
  *     security:
@@ -451,6 +451,13 @@ taxRiskControlsRouter.get(
  *           type: string
  *           format: uuid
  *         description: Client ID
+ *       - in: query
+ *         name: compact
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [true, false]
+ *         description: If 'true', return only cells with count_total > 0. Default is false (returns all 25 cells).
  *     responses:
  *       200:
  *         description: Risk heatmap data
@@ -464,6 +471,7 @@ taxRiskControlsRouter.get(
  *                   properties:
  *                     cells:
  *                       type: array
+ *                       description: Cells ordered by impact DESC (5→1), likelihood ASC (1→5)
  *                       items:
  *                         type: object
  *                         properties:
@@ -475,17 +483,19 @@ taxRiskControlsRouter.get(
  *                             type: integer
  *                             minimum: 1
  *                             maximum: 5
+ *                           score:
+ *                             type: integer
+ *                             minimum: 1
+ *                             maximum: 25
+ *                             description: likelihood × impact
+ *                           level:
+ *                             type: string
+ *                             enum: [green, orange, red]
+ *                             description: Risk level based on score thresholds
  *                           count_total:
  *                             type: integer
- *                           by_level:
- *                             type: object
- *                             properties:
- *                               green:
- *                                 type: integer
- *                               orange:
- *                                 type: integer
- *                               red:
- *                                 type: integer
+ *                             minimum: 0
+ *                             description: Number of risks in this cell
  *                     axes:
  *                       type: object
  *                       properties:
@@ -524,10 +534,15 @@ taxRiskControlsRouter.get(
  */
 taxRiskControlsRouter.get(
   '/heatmap',
-  [param('clientId').isUUID().withMessage('Invalid clientId format')],
+  [
+    param('clientId').isUUID().withMessage('Invalid clientId format'),
+    query('compact').optional().isString().withMessage('compact must be a string'),
+  ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
     const clientId = req.params.clientId;
+    const compactParam = req.query.compact as string | undefined;
+    const compact = compactParam?.toLowerCase() === 'true';
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
@@ -538,7 +553,7 @@ taxRiskControlsRouter.get(
 
     const supabase = getSupabase(req, token);
 
-    const data = await taxRiskControlsService.getRiskHeatmap(supabase, clientId);
+    const data = await taxRiskControlsService.getRiskHeatmap(supabase, clientId, compact);
 
     res.json({ data });
   })

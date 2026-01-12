@@ -309,7 +309,7 @@ describe('Risk Aggregations API', () => {
       expect(res.body.code).toBeTruthy();
     });
 
-    it('should return correct response structure', async () => {
+    it('should return correct response structure with all 25 cells by default', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
       const mockSupabase = {
@@ -329,6 +329,18 @@ describe('Risk Aggregations API', () => {
       expect(res.body.data).toHaveProperty('thresholds');
       
       expect(Array.isArray(res.body.data.cells)).toBe(true);
+      expect(res.body.data.cells).toHaveLength(25);
+      
+      // Check that each cell has the required properties
+      res.body.data.cells.forEach((cell: any) => {
+        expect(cell).toHaveProperty('likelihood');
+        expect(cell).toHaveProperty('impact');
+        expect(cell).toHaveProperty('score');
+        expect(cell).toHaveProperty('level');
+        expect(cell).toHaveProperty('count_total');
+        expect(cell.count_total).toBe(0); // All zeros when no data
+      });
+      
       expect(res.body.data.axes).toEqual({
         likelihood: [1, 2, 3, 4, 5],
         impact: [1, 2, 3, 4, 5]
@@ -340,7 +352,7 @@ describe('Risk Aggregations API', () => {
       });
     });
 
-    it('should aggregate risks by likelihood and impact', async () => {
+    it('should merge RPC data into all 25 cells with correct counts', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
       const mockSupabase = {
@@ -361,22 +373,36 @@ describe('Risk Aggregations API', () => {
         .set('Authorization', `Bearer ${validToken}`);
       
       expect(res.status).toBe(200);
-      expect(res.body.data.cells).toHaveLength(3);
+      expect(res.body.data.cells).toHaveLength(25); // All 25 cells returned
       
+      // Check cells with data
       const cell_3_3 = res.body.data.cells.find((c: any) => c.likelihood === 3 && c.impact === 3);
       expect(cell_3_3).toBeDefined();
       expect(cell_3_3.count_total).toBe(2);
+      expect(cell_3_3.score).toBe(9);
+      expect(cell_3_3.level).toBe('orange');
       
       const cell_4_5 = res.body.data.cells.find((c: any) => c.likelihood === 4 && c.impact === 5);
       expect(cell_4_5).toBeDefined();
       expect(cell_4_5.count_total).toBe(1);
+      expect(cell_4_5.score).toBe(20);
+      expect(cell_4_5.level).toBe('red');
       
       const cell_1_2 = res.body.data.cells.find((c: any) => c.likelihood === 1 && c.impact === 2);
       expect(cell_1_2).toBeDefined();
       expect(cell_1_2.count_total).toBe(1);
+      expect(cell_1_2.score).toBe(2);
+      expect(cell_1_2.level).toBe('green');
+      
+      // Check a cell with no data
+      const cell_5_1 = res.body.data.cells.find((c: any) => c.likelihood === 5 && c.impact === 1);
+      expect(cell_5_1).toBeDefined();
+      expect(cell_5_1.count_total).toBe(0);
+      expect(cell_5_1.score).toBe(5);
+      expect(cell_5_1.level).toBe('green');
     });
 
-    it('should correctly classify cell counts by level', async () => {
+    it('should correctly compute score and level for each cell', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
       const mockSupabase = {
@@ -399,22 +425,19 @@ describe('Risk Aggregations API', () => {
       expect(res.status).toBe(200);
       
       const cell_2_2 = res.body.data.cells.find((c: any) => c.likelihood === 2 && c.impact === 2);
-      expect(cell_2_2.by_level.green).toBe(2);
-      expect(cell_2_2.by_level.orange).toBe(0);
-      expect(cell_2_2.by_level.red).toBe(0);
+      expect(cell_2_2.score).toBe(4);
+      expect(cell_2_2.level).toBe('green');
       
       const cell_3_3 = res.body.data.cells.find((c: any) => c.likelihood === 3 && c.impact === 3);
-      expect(cell_3_3.by_level.green).toBe(0);
-      expect(cell_3_3.by_level.orange).toBe(3);
-      expect(cell_3_3.by_level.red).toBe(0);
+      expect(cell_3_3.score).toBe(9);
+      expect(cell_3_3.level).toBe('orange');
       
       const cell_5_5 = res.body.data.cells.find((c: any) => c.likelihood === 5 && c.impact === 5);
-      expect(cell_5_5.by_level.green).toBe(0);
-      expect(cell_5_5.by_level.orange).toBe(0);
-      expect(cell_5_5.by_level.red).toBe(1);
+      expect(cell_5_5.score).toBe(25);
+      expect(cell_5_5.level).toBe('red');
     });
 
-    it('should only return cells with count_total > 0', async () => {
+    it('should return only non-zero cells when compact=true', async () => {
       const validToken = generateToken({ sub: 'user123', role: 'admin' });
       
       const mockSupabase = {
@@ -429,13 +452,97 @@ describe('Risk Aggregations API', () => {
       vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
       
       const res = await request(app)
-        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap`)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap?compact=true`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${validToken}`);
       
       expect(res.status).toBe(200);
       expect(res.body.data.cells).toHaveLength(2);
       expect(res.body.data.cells.every((c: any) => c.count_total > 0)).toBe(true);
+      
+      const cell_1_1 = res.body.data.cells.find((c: any) => c.likelihood === 1 && c.impact === 1);
+      expect(cell_1_1).toBeDefined();
+      expect(cell_1_1.count_total).toBe(1);
+      
+      const cell_5_5 = res.body.data.cells.find((c: any) => c.likelihood === 5 && c.impact === 5);
+      expect(cell_5_5).toBeDefined();
+      expect(cell_5_5.count_total).toBe(1);
+    });
+
+    it('should order cells by impact DESC, likelihood ASC', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ data: [], error: null })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body.data.cells).toHaveLength(25);
+      
+      // First 5 cells should be impact=5, likelihood=1,2,3,4,5
+      expect(res.body.data.cells[0]).toMatchObject({ likelihood: 1, impact: 5 });
+      expect(res.body.data.cells[1]).toMatchObject({ likelihood: 2, impact: 5 });
+      expect(res.body.data.cells[2]).toMatchObject({ likelihood: 3, impact: 5 });
+      expect(res.body.data.cells[3]).toMatchObject({ likelihood: 4, impact: 5 });
+      expect(res.body.data.cells[4]).toMatchObject({ likelihood: 5, impact: 5 });
+      
+      // Next 5 cells should be impact=4, likelihood=1,2,3,4,5
+      expect(res.body.data.cells[5]).toMatchObject({ likelihood: 1, impact: 4 });
+      expect(res.body.data.cells[6]).toMatchObject({ likelihood: 2, impact: 4 });
+      
+      // Last 5 cells should be impact=1, likelihood=1,2,3,4,5
+      expect(res.body.data.cells[20]).toMatchObject({ likelihood: 1, impact: 1 });
+      expect(res.body.data.cells[24]).toMatchObject({ likelihood: 5, impact: 1 });
+    });
+
+    it('should correctly compute level for boundary scores', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({
+          data: [
+            { likelihood: 1, impact: 5, count_total: 1 }, // score=5 (green)
+            { likelihood: 2, impact: 3, count_total: 1 }, // score=6 (orange)
+            { likelihood: 3, impact: 4, count_total: 1 }, // score=12 (orange)
+            { likelihood: 4, impact: 4, count_total: 1 }, // score=16 (red)
+          ],
+          error: null
+        })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      
+      // Score 5 should be green (boundary)
+      const cell_1_5 = res.body.data.cells.find((c: any) => c.likelihood === 1 && c.impact === 5);
+      expect(cell_1_5.score).toBe(5);
+      expect(cell_1_5.level).toBe('green');
+      
+      // Score 6 should be orange (just above green)
+      const cell_2_3 = res.body.data.cells.find((c: any) => c.likelihood === 2 && c.impact === 3);
+      expect(cell_2_3.score).toBe(6);
+      expect(cell_2_3.level).toBe('orange');
+      
+      // Score 12 should be orange (boundary)
+      const cell_3_4 = res.body.data.cells.find((c: any) => c.likelihood === 3 && c.impact === 4);
+      expect(cell_3_4.score).toBe(12);
+      expect(cell_3_4.level).toBe('orange');
+      
+      // Score 13 should be red (just above orange)
+      const cell_4_4 = res.body.data.cells.find((c: any) => c.likelihood === 4 && c.impact === 4);
+      expect(cell_4_4.score).toBe(16);
+      expect(cell_4_4.level).toBe('red');
     });
 
     it('should enforce client isolation - client cannot access another client', async () => {
