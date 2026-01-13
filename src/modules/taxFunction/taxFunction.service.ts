@@ -151,3 +151,93 @@ export async function importTaxFunction(
     },
   };
 }
+
+export interface CreateRowInput {
+  order_index: number;
+  process_name: string;
+  process_description?: string;
+  stakeholders?: string[];
+  frequency?: string;
+  notes?: string;
+}
+
+export interface UpdateRowInput {
+  order_index?: number;
+  process_name?: string;
+  process_description?: string;
+  stakeholders?: string[];
+  frequency?: string;
+  notes?: string;
+}
+
+export interface ReorderUpdate {
+  id: string;
+  order_index: number;
+}
+
+export async function createRow(
+  supabase: SupabaseClient,
+  clientId: string,
+  payload: CreateRowInput,
+  isAdminBypass: boolean = false
+): Promise<taxFunctionRowsRepository.TaxFunctionRow> {
+  const scope = isAdminBypass
+    ? createAdminBypassScope(supabase, clientId)
+    : createTenantScope(supabase, clientId);
+
+  const rowData: taxFunctionRowsRepository.TaxFunctionRowInsert = {
+    order_index: payload.order_index,
+    process_name: payload.process_name,
+    process_description: payload.process_description,
+    stakeholders: payload.stakeholders,
+    frequency: payload.frequency,
+    notes: payload.notes,
+  };
+
+  return await taxFunctionRowsRepository.insertOne(scope, rowData);
+}
+
+export async function updateRow(
+  supabase: SupabaseClient,
+  clientId: string,
+  id: string,
+  patch: UpdateRowInput,
+  isAdminBypass: boolean = false
+): Promise<taxFunctionRowsRepository.TaxFunctionRow> {
+  const scope = isAdminBypass
+    ? createAdminBypassScope(supabase, clientId)
+    : createTenantScope(supabase, clientId);
+
+  return await taxFunctionRowsRepository.updateById(scope, id, patch);
+}
+
+export async function deleteRow(
+  supabase: SupabaseClient,
+  clientId: string,
+  id: string,
+  isAdminBypass: boolean = false
+): Promise<void> {
+  const scope = isAdminBypass
+    ? createAdminBypassScope(supabase, clientId)
+    : createTenantScope(supabase, clientId);
+
+  await taxFunctionRowsRepository.deleteById(scope, id);
+}
+
+export async function reorderRows(
+  supabase: SupabaseClient,
+  clientId: string,
+  updates: ReorderUpdate[],
+  isAdminBypass: boolean = false
+): Promise<void> {
+  const scope = isAdminBypass
+    ? createAdminBypassScope(supabase, clientId)
+    : createTenantScope(supabase, clientId);
+
+  const bulkUpdates: taxFunctionRowsRepository.BulkOrderUpdate[] = updates.map((u) => ({
+    id: u.id,
+    order_index: u.order_index,
+  }));
+
+  await taxFunctionRowsRepository.bulkUpdateOrder(scope, bulkUpdates);
+}

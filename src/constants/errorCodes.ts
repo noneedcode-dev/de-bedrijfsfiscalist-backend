@@ -63,7 +63,9 @@ export const ErrorCodes = {
   // Tax Function
   TAX_FUNCTION_FETCH_FAILED: 'TAX_FUNCTION_FETCH_FAILED',
   TAX_FUNCTION_CREATE_FAILED: 'TAX_FUNCTION_CREATE_FAILED',
+  TAX_FUNCTION_UPDATE_FAILED: 'TAX_FUNCTION_UPDATE_FAILED',
   TAX_FUNCTION_DELETE_FAILED: 'TAX_FUNCTION_DELETE_FAILED',
+  TAX_FUNCTION_ROW_NOT_FOUND: 'TAX_FUNCTION_ROW_NOT_FOUND',
 
   // Validation
   VALIDATION_FAILED: 'VALIDATION_FAILED',
@@ -152,7 +154,9 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   // Tax Function
   TAX_FUNCTION_FETCH_FAILED: 'Failed to fetch tax function data',
   TAX_FUNCTION_CREATE_FAILED: 'Failed to create tax function data',
+  TAX_FUNCTION_UPDATE_FAILED: 'Failed to update tax function data',
   TAX_FUNCTION_DELETE_FAILED: 'Failed to delete tax function data',
+  TAX_FUNCTION_ROW_NOT_FOUND: 'Tax function row not found',
 
   // Validation
   VALIDATION_FAILED: 'Validation failed',
