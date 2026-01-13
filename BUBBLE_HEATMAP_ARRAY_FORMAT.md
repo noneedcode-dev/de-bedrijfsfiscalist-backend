@@ -23,14 +23,27 @@ const format = typeof formatParam === 'string' ? formatParam.toLowerCase() : 'ob
 const isArray = format === 'array';
 ```
 
-#### Updated Response Logic
+#### Updated Response Logic (VERIFIED Jan 13, 2026)
 ```typescript
+const heatmap = await taxRiskControlsService.getRiskHeatmap(supabase, clientId, compact);
+
+// CRITICAL: When format=array, return PURE JSON array at root level (no wrapper)
+// This allows Bubble API Connector to access: body:first item:likelihood
+// Instead of: body:data:cells:first item:likelihood
 if (isArray) {
-  res.json(data.cells);
+  // Send cells array directly - NO wrapper object
+  return res.status(200).json(heatmap.cells);
 } else {
-  res.json({ data });
+  // Default: wrap in data object for backward compatibility
+  return res.status(200).json({ data: heatmap });
 }
 ```
+
+**Key Implementation Details:**
+- Uses `res.json(heatmap.cells)` to send array directly
+- NO wrapper objects like `{ data: ... }`, `{ body: ... }`, or `{ cells: ... }`
+- Express's `res.json()` serializes the array as-is
+- Returns with explicit `200` status code
 
 ### 2. OpenAPI Documentation
 
@@ -118,16 +131,25 @@ No changes to `taxRiskControls.service.ts`. The service continues to return the 
 
 ## Testing Results
 
-✅ All 30 tests passing:
+✅ All 31 tests passing:
 - 24 existing tests (backward compatibility)
-- 6 new tests for array format functionality
+- 7 tests for array format functionality (including Bubble API Connector simulation)
 
 ```
-✓ tests/riskAggregations.test.ts (30 tests) 77ms
+✓ tests/riskAggregations.test.ts (31 tests)
 
 Test Files  1 passed (1)
-     Tests  30 passed (30)
+     Tests  31 passed (31)
 ```
+
+### Enhanced Test Coverage (Jan 13, 2026)
+
+Added explicit test to verify Bubble API Connector compatibility:
+- ✅ Response is pure array at root level (not wrapped in any object)
+- ✅ Direct field access works: `body[0].likelihood` (simulating Bubble's `body:first item:likelihood`)
+- ✅ No double nesting: `body.body[0]` does not exist
+- ✅ No data wrapper: `body.data.cells[0]` does not exist
+- ✅ No cells wrapper: `body.cells[0]` does not exist
 
 ## Impact
 

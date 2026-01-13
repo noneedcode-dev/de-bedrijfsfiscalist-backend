@@ -593,12 +593,17 @@ taxRiskControlsRouter.get(
 
     const supabase = getSupabase(req, token);
 
-    const data = await taxRiskControlsService.getRiskHeatmap(supabase, clientId, compact);
+    const heatmap = await taxRiskControlsService.getRiskHeatmap(supabase, clientId, compact);
 
+    // CRITICAL: When format=array, return PURE JSON array at root level (no wrapper)
+    // This allows Bubble API Connector to access: body:first item:likelihood
+    // Instead of: body:data:cells:first item:likelihood
     if (isArray) {
-      res.json(data.cells);
+      // Send cells array directly - NO wrapper object
+      return res.status(200).json(heatmap.cells);
     } else {
-      res.json({ data });
+      // Default: wrap in data object for backward compatibility
+      return res.status(200).json({ data: heatmap });
     }
   })
 );

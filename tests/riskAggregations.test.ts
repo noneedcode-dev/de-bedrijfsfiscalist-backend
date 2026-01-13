@@ -594,8 +594,16 @@ describe('Risk Aggregations API', () => {
         .set('Authorization', `Bearer ${validToken}`);
       
       expect(res.status).toBe(200);
+      
+      // CRITICAL: Verify response is a pure JSON array at root level
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body).toHaveLength(25);
+      
+      // Verify it's NOT wrapped in any object
+      expect(res.body).not.toHaveProperty('data');
+      expect(res.body).not.toHaveProperty('body');
+      expect(res.body).not.toHaveProperty('cells');
+      expect(res.body).not.toHaveProperty('result');
       
       // Check that each cell has the required properties
       res.body.forEach((cell: any) => {
@@ -606,8 +614,11 @@ describe('Risk Aggregations API', () => {
         expect(cell).toHaveProperty('count_total');
       });
       
-      // Verify it's a direct array, not wrapped in data
+      // Verify first element is directly accessible (not nested)
+      expect(res.body[0]).toBeDefined();
+      expect(res.body[0].likelihood).toBeDefined();
       expect(res.body[0]).not.toHaveProperty('data');
+      expect(res.body[0]).not.toHaveProperty('body');
     });
 
     it('should return array format with compact when format=array&compact=true', async () => {
@@ -704,6 +715,51 @@ describe('Risk Aggregations API', () => {
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body).toHaveLength(25);
+    });
+
+    it('should return pure array that Bubble API Connector can access directly (body:first item:likelihood)', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({
+          data: [
+            { likelihood: 3, impact: 4, count_total: 5 },
+            { likelihood: 2, impact: 2, count_total: 3 },
+          ],
+          error: null
+        })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap?format=array`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      
+      // Simulate Bubble API Connector access pattern
+      // In Bubble: body:first item:likelihood should directly access res.body[0].likelihood
+      const body = res.body;
+      expect(Array.isArray(body)).toBe(true);
+      
+      // Bubble's "first item" = body[0]
+      const firstItem = body[0];
+      expect(firstItem).toBeDefined();
+      
+      // Bubble's "first item:likelihood" = body[0].likelihood
+      const likelihood = firstItem.likelihood;
+      expect(likelihood).toBeDefined();
+      expect(typeof likelihood).toBe('number');
+      expect(likelihood).toBeGreaterThanOrEqual(1);
+      expect(likelihood).toBeLessThanOrEqual(5);
+      
+      // Verify this is NOT body.body[0].likelihood (double nested)
+      expect((body as any).body).toBeUndefined();
+      
+      // Verify this is NOT body.data.cells[0].likelihood (wrapped in object)
+      expect((body as any).data).toBeUndefined();
+      expect((body as any).cells).toBeUndefined();
     });
   });
 
