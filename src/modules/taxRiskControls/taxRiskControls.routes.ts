@@ -437,7 +437,7 @@ taxRiskControlsRouter.get(
  * /api/clients/{clientId}/tax/risk-controls/heatmap:
  *   get:
  *     summary: Get risk heatmap
- *     description: Retrieve 5x5 risk heatmap aggregation by likelihood and impact. Returns all 25 cells by default with score, level, and counts. Use compact=true to return only non-zero cells.
+ *     description: Retrieve 5x5 risk heatmap aggregation by likelihood and impact. Returns all 25 cells by default with score, level, and counts. Use compact=true to return only non-zero cells. Use format=array for Bubble-friendly array response.
  *     tags:
  *       - Tax Risk Controls
  *     security:
@@ -458,69 +458,104 @@ taxRiskControlsRouter.get(
  *           type: string
  *           enum: [true, false]
  *         description: If 'true', return only cells with count_total > 0. Default is false (returns all 25 cells).
+ *       - in: query
+ *         name: format
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [object, array]
+ *         description: Response format. 'object' (default) returns {data:{cells,axes,thresholds}}. 'array' returns cells array directly for Bubble API Connector compatibility.
  *     responses:
  *       200:
  *         description: Risk heatmap data
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   type: object
+ *               oneOf:
+ *                 - type: object
+ *                   description: Default object format (format=object or not specified)
  *                   properties:
- *                     cells:
- *                       type: array
- *                       description: Cells ordered by impact DESC (5→1), likelihood ASC (1→5)
- *                       items:
- *                         type: object
- *                         properties:
- *                           likelihood:
- *                             type: integer
- *                             minimum: 1
- *                             maximum: 5
- *                           impact:
- *                             type: integer
- *                             minimum: 1
- *                             maximum: 5
- *                           score:
- *                             type: integer
- *                             minimum: 1
- *                             maximum: 25
- *                             description: likelihood × impact
- *                           level:
- *                             type: string
- *                             enum: [green, orange, red]
- *                             description: Risk level based on score thresholds
- *                           count_total:
- *                             type: integer
- *                             minimum: 0
- *                             description: Number of risks in this cell
- *                     axes:
+ *                     data:
  *                       type: object
  *                       properties:
- *                         likelihood:
+ *                         cells:
  *                           type: array
+ *                           description: Cells ordered by impact DESC (5→1), likelihood ASC (1→5)
  *                           items:
- *                             type: integer
- *                           example: [1, 2, 3, 4, 5]
- *                         impact:
- *                           type: array
- *                           items:
- *                             type: integer
- *                           example: [1, 2, 3, 4, 5]
- *                     thresholds:
- *                       type: object
- *                       properties:
- *                         green_max:
- *                           type: integer
- *                           example: 5
- *                         orange_max:
- *                           type: integer
- *                           example: 12
- *                         red_max:
- *                           type: integer
- *                           example: 25
+ *                             type: object
+ *                             properties:
+ *                               likelihood:
+ *                                 type: integer
+ *                                 minimum: 1
+ *                                 maximum: 5
+ *                               impact:
+ *                                 type: integer
+ *                                 minimum: 1
+ *                                 maximum: 5
+ *                               score:
+ *                                 type: integer
+ *                                 minimum: 1
+ *                                 maximum: 25
+ *                                 description: likelihood × impact
+ *                               level:
+ *                                 type: string
+ *                                 enum: [green, orange, red]
+ *                                 description: Risk level based on score thresholds
+ *                               count_total:
+ *                                 type: integer
+ *                                 minimum: 0
+ *                                 description: Number of risks in this cell
+ *                         axes:
+ *                           type: object
+ *                           properties:
+ *                             likelihood:
+ *                               type: array
+ *                               items:
+ *                                 type: integer
+ *                               example: [1, 2, 3, 4, 5]
+ *                             impact:
+ *                               type: array
+ *                               items:
+ *                                 type: integer
+ *                               example: [1, 2, 3, 4, 5]
+ *                         thresholds:
+ *                           type: object
+ *                           properties:
+ *                             green_max:
+ *                               type: integer
+ *                               example: 5
+ *                             orange_max:
+ *                               type: integer
+ *                               example: 12
+ *                             red_max:
+ *                               type: integer
+ *                               example: 25
+ *                 - type: array
+ *                   description: Array format (format=array). Returns cells directly.
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       likelihood:
+ *                         type: integer
+ *                         minimum: 1
+ *                         maximum: 5
+ *                       impact:
+ *                         type: integer
+ *                         minimum: 1
+ *                         maximum: 5
+ *                       score:
+ *                         type: integer
+ *                         minimum: 1
+ *                         maximum: 25
+ *                         description: likelihood × impact
+ *                       level:
+ *                         type: string
+ *                         enum: [green, orange, red]
+ *                         description: Risk level based on score thresholds
+ *                       count_total:
+ *                         type: integer
+ *                         minimum: 0
+ *                         description: Number of risks in this cell
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       401:
@@ -537,12 +572,17 @@ taxRiskControlsRouter.get(
   [
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     query('compact').optional().isString().withMessage('compact must be a string'),
+    query('format').optional().isString().withMessage('format must be a string'),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
     const clientId = req.params.clientId;
     const compactParam = req.query.compact as string | undefined;
     const compact = compactParam?.toLowerCase() === 'true';
+    
+    const formatParam = req.query.format as string | undefined;
+    const format = typeof formatParam === 'string' ? formatParam.toLowerCase() : 'object';
+    const isArray = format === 'array';
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
@@ -555,7 +595,11 @@ taxRiskControlsRouter.get(
 
     const data = await taxRiskControlsService.getRiskHeatmap(supabase, clientId, compact);
 
-    res.json({ data });
+    if (isArray) {
+      res.json(data.cells);
+    } else {
+      res.json({ data });
+    }
   })
 );
 

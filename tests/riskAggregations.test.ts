@@ -579,6 +579,132 @@ describe('Risk Aggregations API', () => {
       
       expect(res.status).toBe(200);
     });
+
+    it('should return array format when format=array is specified', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ data: [], error: null })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap?format=array`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body).toHaveLength(25);
+      
+      // Check that each cell has the required properties
+      res.body.forEach((cell: any) => {
+        expect(cell).toHaveProperty('likelihood');
+        expect(cell).toHaveProperty('impact');
+        expect(cell).toHaveProperty('score');
+        expect(cell).toHaveProperty('level');
+        expect(cell).toHaveProperty('count_total');
+      });
+      
+      // Verify it's a direct array, not wrapped in data
+      expect(res.body[0]).not.toHaveProperty('data');
+    });
+
+    it('should return array format with compact when format=array&compact=true', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({
+          data: [
+            { likelihood: 2, impact: 3, count_total: 5 },
+            { likelihood: 4, impact: 5, count_total: 2 },
+          ],
+          error: null
+        })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap?format=array&compact=true`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body).toHaveLength(2);
+      expect(res.body.every((c: any) => c.count_total > 0)).toBe(true);
+      
+      const cell_2_3 = res.body.find((c: any) => c.likelihood === 2 && c.impact === 3);
+      expect(cell_2_3).toBeDefined();
+      expect(cell_2_3.count_total).toBe(5);
+      expect(cell_2_3.score).toBe(6);
+      expect(cell_2_3.level).toBe('orange');
+      
+      const cell_4_5 = res.body.find((c: any) => c.likelihood === 4 && c.impact === 5);
+      expect(cell_4_5).toBeDefined();
+      expect(cell_4_5.count_total).toBe(2);
+      expect(cell_4_5.score).toBe(20);
+      expect(cell_4_5.level).toBe('red');
+    });
+
+    it('should return default object format when format is not specified', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ data: [], error: null })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('data');
+      expect(res.body.data).toHaveProperty('cells');
+      expect(res.body.data).toHaveProperty('axes');
+      expect(res.body.data).toHaveProperty('thresholds');
+      expect(Array.isArray(res.body.data.cells)).toBe(true);
+    });
+
+    it('should return default object format when format=object', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ data: [], error: null })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap?format=object`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('data');
+      expect(res.body.data).toHaveProperty('cells');
+      expect(res.body.data).toHaveProperty('axes');
+      expect(res.body.data).toHaveProperty('thresholds');
+    });
+
+    it('should handle format parameter case-insensitively', async () => {
+      const validToken = generateToken({ sub: 'user123', role: 'admin' });
+      
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ data: [], error: null })
+      };
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/tax/risk-controls/heatmap?format=ARRAY`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${validToken}`);
+      
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body).toHaveLength(25);
+    });
   });
 
   describe('Risk Scoring Consistency', () => {
