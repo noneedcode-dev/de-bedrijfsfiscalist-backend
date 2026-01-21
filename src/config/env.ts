@@ -73,6 +73,12 @@ export const env = {
   google: {
     GOOGLE_APPLICATION_CREDENTIALS: getOptionalEnv('GOOGLE_APPLICATION_CREDENTIALS'),
   },
+  
+  // Documents
+  documents: {
+    maxSizeMB: parseInt(getOptionalEnv('DOCUMENTS_MAX_SIZE_MB') || '10', 10),
+    signedUrlTtlSeconds: parseInt(getOptionalEnv('DOCUMENTS_SIGNED_URL_TTL_SECONDS') || '300', 10),
+  },
 };
 
 // Validate environment on module load
