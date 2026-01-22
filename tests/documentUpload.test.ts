@@ -13,6 +13,7 @@ const createMockQueryBuilder = (mockData: any = { data: [], error: null }) => {
     from: vi.fn(() => builder),
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
+    is: vi.fn(() => builder),
     insert: vi.fn(() => builder),
     delete: vi.fn(() => builder),
     single: vi.fn(() => builder),
@@ -616,6 +617,238 @@ describe('PR-2: Document Upload with Idempotency', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.message).toContain('Failed to generate signed URL');
+    });
+  });
+
+  describe('GET /api/clients/:clientId/documents - PR-4 Pagination & Search', () => {
+    it('should return paginated documents with default limit and offset', async () => {
+      const mockDocuments = [
+        { id: 'doc-1', client_id: CLIENT_A_ID, name: 'file1.pdf', created_at: '2025-01-21T10:00:00Z' },
+        { id: 'doc-2', client_id: CLIENT_A_ID, name: 'file2.pdf', created_at: '2025-01-21T09:00:00Z' },
+        { id: 'doc-3', client_id: CLIENT_A_ID, name: 'file3.pdf', created_at: '2025-01-21T08:00:00Z' },
+      ];
+
+      // Mock admin client query with count
+      mockAdminSupabaseClient.select = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.eq = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.is = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.order = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.range = vi.fn(() =>
+        Promise.resolve({
+          data: mockDocuments,
+          error: null,
+          count: 3,
+        })
+      );
+
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_A_ID}/documents`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(3);
+      expect(res.body.meta).toEqual({
+        total: 3,
+        limit: 20,
+        offset: 0,
+        timestamp: expect.any(String),
+      });
+    });
+
+    it('should return paginated documents with custom limit and offset', async () => {
+      const mockDocuments = [
+        { id: 'doc-2', client_id: CLIENT_A_ID, name: 'file2.pdf', created_at: '2025-01-21T09:00:00Z' },
+      ];
+
+      mockAdminSupabaseClient.select = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.eq = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.is = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.order = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.range = vi.fn((start: number, end: number) => {
+        expect(start).toBe(1);
+        expect(end).toBe(1); // offset + limit - 1 = 1 + 1 - 1 = 1
+        return Promise.resolve({
+          data: mockDocuments,
+          error: null,
+          count: 5,
+        });
+      });
+
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_A_ID}/documents?limit=1&offset=1`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].id).toBe('doc-2');
+      expect(res.body.meta).toEqual({
+        total: 5,
+        limit: 1,
+        offset: 1,
+        timestamp: expect.any(String),
+      });
+    });
+
+    it('should filter documents by search query (q parameter)', async () => {
+      const mockDocuments = [
+        { id: 'doc-1', client_id: CLIENT_A_ID, name: 'invoice_2025.pdf', created_at: '2025-01-21T10:00:00Z' },
+      ];
+
+      mockAdminSupabaseClient.select = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.eq = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.is = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.ilike = vi.fn((field: string, pattern: string) => {
+        expect(field).toBe('name');
+        expect(pattern).toBe('%invoice%');
+        return mockAdminSupabaseClient;
+      });
+      mockAdminSupabaseClient.order = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.range = vi.fn(() =>
+        Promise.resolve({
+          data: mockDocuments,
+          error: null,
+          count: 1,
+        })
+      );
+
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_A_ID}/documents?q=invoice`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].name).toContain('invoice');
+      expect(res.body.meta.total).toBe(1);
+    });
+
+    it('should return 422 when limit is invalid (too high)', async () => {
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_A_ID}/documents?limit=500`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('should return 422 when limit is invalid (zero)', async () => {
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_A_ID}/documents?limit=0`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('should return 422 when offset is negative', async () => {
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_A_ID}/documents?offset=-5`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('should return 422 when search query is too long', async () => {
+      const longQuery = 'a'.repeat(201);
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_A_ID}/documents?q=${longQuery}`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('should return 403 when client tries to access another client\'s documents', async () => {
+      // Client A trying to access Client B's documents
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_B_ID}/documents`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('CLIENT_ACCESS_DENIED');
+    });
+
+    it('should combine pagination, search, and existing filters', async () => {
+      const mockDocuments = [
+        {
+          id: 'doc-1',
+          client_id: CLIENT_A_ID,
+          name: 'invoice.pdf',
+          source: 's3',
+          kind: 'client_upload',
+          created_at: '2025-01-21T10:00:00Z',
+        },
+      ];
+
+      mockAdminSupabaseClient.select = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.eq = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.is = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.ilike = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.order = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.range = vi.fn(() =>
+        Promise.resolve({
+          data: mockDocuments,
+          error: null,
+          count: 1,
+        })
+      );
+
+      const res = await request(app)
+        .get(
+          `/api/clients/${CLIENT_A_ID}/documents?source=s3&kind=client_upload&q=invoice&limit=10&offset=0`
+        )
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientAToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.meta).toEqual({
+        total: 1,
+        limit: 10,
+        offset: 0,
+        timestamp: expect.any(String),
+      });
+
+      // Verify all filters were applied
+      expect(mockAdminSupabaseClient.eq).toHaveBeenCalledWith('client_id', CLIENT_A_ID);
+      expect(mockAdminSupabaseClient.eq).toHaveBeenCalledWith('source', 's3');
+      expect(mockAdminSupabaseClient.eq).toHaveBeenCalledWith('kind', 'client_upload');
+      expect(mockAdminSupabaseClient.ilike).toHaveBeenCalledWith('name', '%invoice%');
+    });
+
+    it('should allow admin to access any client\'s documents with pagination', async () => {
+      const mockDocuments = [
+        { id: 'doc-b1', client_id: CLIENT_B_ID, name: 'client-b-doc.pdf', created_at: '2025-01-21T10:00:00Z' },
+      ];
+
+      mockAdminSupabaseClient.select = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.eq = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.is = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.order = vi.fn(() => mockAdminSupabaseClient);
+      mockAdminSupabaseClient.range = vi.fn(() =>
+        Promise.resolve({
+          data: mockDocuments,
+          error: null,
+          count: 1,
+        })
+      );
+
+      const res = await request(app)
+        .get(`/api/clients/${CLIENT_B_ID}/documents?limit=5`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data[0].client_id).toBe(CLIENT_B_ID);
+      expect(res.body.meta.limit).toBe(5);
     });
   });
 });

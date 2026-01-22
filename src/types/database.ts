@@ -36,6 +36,9 @@ export interface DbDocument {
   size_bytes: number | null;
   storage_path: string | null;
   preview_url: string | null;
+  upload_session_id?: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
   created_at: string;
 }
 

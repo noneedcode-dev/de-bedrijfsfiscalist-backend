@@ -78,6 +78,7 @@ export const env = {
   documents: {
     maxSizeMB: parseInt(getOptionalEnv('DOCUMENTS_MAX_SIZE_MB') || '10', 10),
     signedUrlTtlSeconds: parseInt(getOptionalEnv('DOCUMENTS_SIGNED_URL_TTL_SECONDS') || '300', 10),
+    previewSignedUrlTtlSeconds: parseInt(getOptionalEnv('DOCUMENTS_PREVIEW_SIGNED_URL_TTL_SECONDS') || '300', 10),
   },
 };
 

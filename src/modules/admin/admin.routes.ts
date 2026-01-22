@@ -5,7 +5,7 @@ import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import { createSupabaseAdminClient } from '../../lib/supabaseClient';
 import { requireRole } from '../auth/auth.middleware';
-import { DbClient, DbAppUser, DbInvitation, DbAppUserListItem } from '../../types/database';
+import { DbClient, DbAppUser, DbInvitation, DbAppUserListItem, DbDocument } from '../../types/database';
 import { logger } from '../../config/logger';
 import { invitationService } from '../../services/invitationService';
 import { auditLogService } from '../../services/auditLogService';
@@ -991,6 +991,180 @@ adminRouter.get(
       count: count ?? 0,
       limit,
       offset,
+    });
+  })
+);
+
+/**
+ * @openapi
+ * /api/admin/documents:
+ *   get:
+ *     summary: List documents across all clients
+ *     description: Retrieve a paginated list of documents with optional filters for client_id and search. Admin only.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: client_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter by client ID
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Search documents by name (case-insensitive)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Number of documents to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *         description: Number of documents to skip
+ *       - in: query
+ *         name: include_deleted
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include soft-deleted documents (reserved for future use)
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Document'
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       429:
+ *         $ref: '#/components/responses/RateLimitError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+adminRouter.get(
+  '/documents',
+  [
+    query('client_id')
+      .optional()
+      .isUUID()
+      .withMessage('client_id must be a valid UUID'),
+    query('q')
+      .optional()
+      .isString()
+      .trim(),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage('limit must be between 1 and 100'),
+    query('offset')
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage('offset must be a non-negative integer'),
+    query('include_deleted')
+      .optional()
+      .isBoolean()
+      .toBoolean(),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.query.client_id as string | undefined;
+    const searchQuery = req.query.q as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+    const includeDeleted = (req.query.include_deleted as unknown as boolean) === true;
+
+    const supabase = createSupabaseAdminClient();
+
+    let queryBuilder = supabase
+      .from('documents')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (clientId) {
+      queryBuilder = queryBuilder.eq('client_id', clientId);
+    }
+
+    if (searchQuery) {
+      queryBuilder = queryBuilder.ilike('name', `%${searchQuery}%`);
+    }
+
+    const { data, error, count } = await queryBuilder
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      const errorMsg = error.message || error.code || 'Unknown error';
+      logger.error('Failed to fetch documents for admin', {
+        error: errorMsg,
+        error_code: error.code,
+        filters: { clientId, searchQuery, includeDeleted },
+      });
+      throw new AppError(`Documents getirilemedi: ${errorMsg}`, 500);
+    }
+
+    const total = count ?? 0;
+
+    // Audit log (non-blocking)
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.ADMIN_DOCUMENTS_LISTED,
+      entity_type: 'document',
+      metadata: {
+        filters: {
+          client_id: clientId || null,
+          q: searchQuery || null,
+          include_deleted: includeDeleted,
+        },
+        result_count: data?.length ?? 0,
+        total_count: total,
+        pagination: {
+          limit,
+          offset,
+        },
+      },
+    });
+
+    return res.json({
+      data: (data ?? []) as DbDocument[],
+      meta: {
+        total,
+        limit,
+        offset,
+        timestamp: new Date().toISOString(),
+      },
     });
   })
 );

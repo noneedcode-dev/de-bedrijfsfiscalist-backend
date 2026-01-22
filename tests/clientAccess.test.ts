@@ -12,6 +12,7 @@ const createMockQueryBuilder = (mockData: any = { data: [], error: null }) => {
     from: vi.fn(() => builder),
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
+    is: vi.fn(() => builder),
     gte: vi.fn(() => builder),
     lte: vi.fn(() => builder),
     neq: vi.fn(() => builder),

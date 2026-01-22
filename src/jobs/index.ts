@@ -3,6 +3,8 @@ import cron from 'node-cron';
 import { logger } from '../config/logger';
 import { env } from '../config/env';
 import { cleanupExpiredInvitations } from './cleanupExpiredInvitations';
+import { processDocumentPreviews } from './processDocumentPreviews';
+import { processDocumentExports } from './processDocumentExports';
 
 /**
  * Initialize and start all background jobs
@@ -30,7 +32,25 @@ export function initializeJobs(): void {
     }
   });
 
-  // Job 2: Health check / keep-alive (runs every hour)
+  // Job 2: Process document preview generation (runs every 30 seconds)
+  cron.schedule('*/30 * * * * *', async () => {
+    try {
+      await processDocumentPreviews();
+    } catch (error) {
+      logger.error('Failed to run document preview processor', { error });
+    }
+  });
+
+  // Job 3: Process document exports (runs every 30 seconds)
+  cron.schedule('*/30 * * * * *', async () => {
+    try {
+      await processDocumentExports();
+    } catch (error) {
+      logger.error('Failed to run document export processor', { error });
+    }
+  });
+
+  // Job 4: Health check / keep-alive (runs every hour)
   cron.schedule('0 * * * *', () => {
     logger.debug('⏰ Running scheduled job: health check');
     // Simple health check to keep the process alive
