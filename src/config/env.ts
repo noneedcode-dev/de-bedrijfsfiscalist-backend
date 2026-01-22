@@ -74,6 +74,23 @@ export const env = {
     GOOGLE_APPLICATION_CREDENTIALS: getOptionalEnv('GOOGLE_APPLICATION_CREDENTIALS'),
   },
   
+  // External Storage Integration
+  externalStorage: {
+    tokenEncryptionKey: isTestMode 
+      ? '0'.repeat(64) // 32 bytes in hex for test mode
+      : getRequiredEnv('EXTERNAL_STORAGE_TOKEN_ENCRYPTION_KEY'),
+    googleDrive: {
+      clientId: getOptionalEnv('GOOGLE_DRIVE_CLIENT_ID') || '',
+      clientSecret: getOptionalEnv('GOOGLE_DRIVE_CLIENT_SECRET') || '',
+      redirectUri: getOptionalEnv('GOOGLE_DRIVE_REDIRECT_URI') || '',
+    },
+    microsoft: {
+      clientId: getOptionalEnv('MICROSOFT_CLIENT_ID') || '',
+      clientSecret: getOptionalEnv('MICROSOFT_CLIENT_SECRET') || '',
+      redirectUri: getOptionalEnv('MICROSOFT_REDIRECT_URI') || '',
+    },
+  },
+  
   // Documents
   documents: {
     maxSizeMB: parseInt(getOptionalEnv('DOCUMENTS_MAX_SIZE_MB') || '10', 10),
@@ -84,8 +101,25 @@ export const env = {
 
 // Validate environment on module load
 export function validateEnv(): void {
+  // Validate encryption key format (must be 64 hex chars = 32 bytes)
+  const encryptionKey = env.externalStorage.tokenEncryptionKey;
+  if (encryptionKey.length !== 64) {
+    throw new Error(
+      `EXTERNAL_STORAGE_TOKEN_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes). ` +
+      `Current length: ${encryptionKey.length}. ` +
+      `Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+    );
+  }
+  if (!/^[0-9a-fA-F]{64}$/.test(encryptionKey)) {
+    throw new Error(
+      `EXTERNAL_STORAGE_TOKEN_ENCRYPTION_KEY must contain only hexadecimal characters (0-9, a-f, A-F). ` +
+      `Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+    );
+  }
+  
   console.log('✓ Environment variables validated successfully');
   console.log(`✓ Running in ${env.nodeEnv} mode`);
   console.log(`✓ Server will listen on port ${env.port}`);
+  console.log('✓ External storage encryption key validated');
 }
 

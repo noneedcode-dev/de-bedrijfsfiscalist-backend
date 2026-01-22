@@ -19,6 +19,8 @@ import { taxRiskControlsRouter } from './modules/taxRiskControls/taxRiskControls
 import { taxRiskMatrixRouter } from './modules/taxRiskMatrix/taxRiskMatrix.routes';
 import { taxFunctionRouter } from './modules/taxFunction/taxFunction.routes';
 import { documentsRouter } from './modules/documents/documents.routes';
+import { externalStorageClientRouter } from './modules/externalStorage/externalStorageClient.routes';
+import { externalStorageCallbackRouter } from './modules/externalStorage/externalStorageCallback.routes';
 import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
 
@@ -90,8 +92,12 @@ export function createApp() {
   clientRouter.use('/tax/risk-matrix', taxRiskMatrixRouter);
   clientRouter.use('/tax/function', taxFunctionRouter);
   clientRouter.use('/documents', documentsRouter);
+  clientRouter.use('/external-storage', externalStorageClientRouter);
 
   app.use('/api/clients/:clientId', authenticateJWT, validateClientAccess, clientRouter);
+  
+  // External storage OAuth callback (no client ID in path, no auth required)
+  app.use('/api/external-storage', externalStorageCallbackRouter);
 
   // 404 & error handler
   app.use(notFoundHandler);

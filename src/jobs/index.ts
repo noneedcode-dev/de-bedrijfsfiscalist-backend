@@ -5,6 +5,7 @@ import { env } from '../config/env';
 import { cleanupExpiredInvitations } from './cleanupExpiredInvitations';
 import { processDocumentPreviews } from './processDocumentPreviews';
 import { processDocumentExports } from './processDocumentExports';
+import { processExternalUploads } from './processExternalUploads';
 
 /**
  * Initialize and start all background jobs
@@ -50,7 +51,16 @@ export function initializeJobs(): void {
     }
   });
 
-  // Job 4: Health check / keep-alive (runs every hour)
+  // Job 4: Process external storage uploads (runs every 30 seconds)
+  cron.schedule('*/30 * * * * *', async () => {
+    try {
+      await processExternalUploads();
+    } catch (error) {
+      logger.error('Failed to run external upload processor', { error });
+    }
+  });
+
+  // Job 5: Health check / keep-alive (runs every hour)
   cron.schedule('0 * * * *', () => {
     logger.debug('⏰ Running scheduled job: health check');
     // Simple health check to keep the process alive

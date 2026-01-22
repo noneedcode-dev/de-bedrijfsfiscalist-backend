@@ -771,7 +771,34 @@ documentsRouter.post(
       });
     }
 
-    // Step 6: Audit log (non-blocking)
+    // Step 6: Check if external storage mirroring is enabled (non-blocking)
+    try {
+      const { externalStorageService } = await import('../externalStorage/externalStorageService');
+      const mirrorSettings = await externalStorageService.getMirrorSettings(clientId);
+      
+      if (mirrorSettings.enabled && mirrorSettings.provider) {
+        await externalStorageService.enqueueUploadJob(clientId, docId, mirrorSettings.provider);
+        
+        auditLogService.logAsync({
+          client_id: clientId,
+          actor_user_id: createdBy,
+          actor_role: req.user?.role,
+          action: AuditActions.DOCUMENT_EXTERNAL_UPLOAD_ENQUEUED,
+          entity_type: 'document',
+          entity_id: docId,
+          metadata: {
+            provider: mirrorSettings.provider,
+          },
+        });
+      }
+    } catch (error) {
+      logger.warn('Failed to enqueue external upload job', { 
+        documentId: docId, 
+        error 
+      });
+    }
+
+    // Step 7: Audit log (non-blocking)
     auditLogService.logAsync({
       client_id: clientId,
       actor_user_id: createdBy,
