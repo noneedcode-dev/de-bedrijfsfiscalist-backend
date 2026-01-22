@@ -15,8 +15,7 @@ export class MicrosoftGraphProvider implements IExternalStorageProvider {
   async uploadFile(
     connection: ExternalStorageConnection,
     fileBuffer: Buffer,
-    fileName: string,
-    mimeType: string
+    fileName: string
   ): Promise<UploadResult> {
     try {
       const rootPath = connection.root_folder_id 
@@ -26,9 +25,9 @@ export class MicrosoftGraphProvider implements IExternalStorageProvider {
       const fileSize = fileBuffer.length;
       
       if (fileSize < 4 * 1024 * 1024) {
-        return await this.simpleUpload(connection, fileBuffer, fileName, mimeType, rootPath);
+        return await this.simpleUpload(connection, fileBuffer, fileName, rootPath);
       } else {
-        return await this.uploadSession(connection, fileBuffer, fileName, mimeType, rootPath);
+        return await this.uploadSession(connection, fileBuffer, fileName, rootPath);
       }
     } catch (error: any) {
       logger.error('Microsoft Graph upload failed', {
@@ -44,7 +43,6 @@ export class MicrosoftGraphProvider implements IExternalStorageProvider {
     connection: ExternalStorageConnection,
     fileBuffer: Buffer,
     fileName: string,
-    mimeType: string,
     rootPath: string
   ): Promise<UploadResult> {
     const uploadUrl = `${this.GRAPH_API_BASE}${rootPath}:/${encodeURIComponent(fileName)}:/content`;
@@ -52,7 +50,7 @@ export class MicrosoftGraphProvider implements IExternalStorageProvider {
     const response = await axios.put(uploadUrl, fileBuffer, {
       headers: {
         'Authorization': `Bearer ${connection.access_token}`,
-        'Content-Type': mimeType,
+        'Content-Type': 'application/octet-stream',
       },
     });
 
@@ -67,7 +65,6 @@ export class MicrosoftGraphProvider implements IExternalStorageProvider {
     connection: ExternalStorageConnection,
     fileBuffer: Buffer,
     fileName: string,
-    mimeType: string,
     rootPath: string
   ): Promise<UploadResult> {
     const sessionUrl = `${this.GRAPH_API_BASE}${rootPath}:/${encodeURIComponent(fileName)}:/createUploadSession`;
