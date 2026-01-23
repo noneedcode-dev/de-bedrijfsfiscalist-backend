@@ -10,6 +10,13 @@ export interface InvitationEmailData {
   expiresInHours: number;
 }
 
+export interface MessageNotificationData {
+  to: string[];
+  senderName: string;
+  messagePreview: string;
+  conversationUrl: string;
+}
+
 /**
  * Email service for sending notifications
  * 
@@ -86,6 +93,102 @@ De Bedrijfsfiscalist Team
   }
 
   /**
+   * Send message notification email
+   * Used for client-admin messaging notifications
+   */
+  async sendMessageNotification(data: MessageNotificationData): Promise<void> {
+    if (data.to.length === 0) {
+      logger.warn('No recipients for message notification');
+      return;
+    }
+
+    const subject = 'New message from De Bedrijfsfiscalist';
+    const emailContent = this.generateMessageNotificationEmail(data);
+
+    if (env.nodeEnv === 'production' && env.email.provider === 'sendgrid') {
+      await this.sendViaSendGrid(data.to, subject, emailContent);
+    } else {
+      // Development or console mode: Log to console
+      logger.info('📧 Message Notification Email (DEV MODE - Not actually sent)', {
+        to: data.to,
+        subject,
+        senderName: data.senderName,
+        conversationUrl: data.conversationUrl,
+      });
+      
+      console.log('\n' + '='.repeat(70));
+      console.log('📧 MESSAGE NOTIFICATION EMAIL (DEVELOPMENT MODE - NOT SENT)');
+      console.log('='.repeat(70));
+      console.log(`To: ${data.to.join(', ')}`);
+      console.log(`Subject: ${subject}`);
+      console.log('\n' + emailContent);
+      console.log('='.repeat(70) + '\n');
+    }
+  }
+
+  /**
+   * Generate content for message notification email
+   */
+  private generateMessageNotificationEmail(data: MessageNotificationData): string {
+    return `
+Hello,
+
+${data.senderName} has sent you a new message:
+
+"${data.messagePreview}"
+
+To view and respond to this message, please visit:
+${data.conversationUrl}
+
+Best regards,
+De Bedrijfsfiscalist Team
+    `.trim();
+  }
+
+  /**
+   * Send email via SendGrid
+   */
+  private async sendViaSendGrid(to: string[], subject: string, content: string): Promise<void> {
+    if (!env.email.sendgridApiKey) {
+      logger.warn('SendGrid API key not configured, skipping email send', { to, subject });
+      return;
+    }
+
+    try {
+      // Dynamic import to avoid requiring @sendgrid/mail in dev/test
+      const sgMail = await import('@sendgrid/mail');
+      sgMail.default.setApiKey(env.email.sendgridApiKey);
+
+      await sgMail.default.send({
+        to,
+        from: env.email.from,
+        subject,
+        text: content,
+        html: this.convertToHtml(content),
+      });
+
+      logger.info('Email sent via SendGrid', { to, subject });
+    } catch (error) {
+      logger.error('Failed to send email via SendGrid', {
+        error: error instanceof Error ? error.message : String(error),
+        to,
+        subject,
+      });
+      // Don't throw - email failure should not break the API response
+    }
+  }
+
+  /**
+   * Convert plain text to simple HTML
+   */
+  private convertToHtml(text: string): string {
+    return text
+      .split('\n\n')
+      .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  }
+
+  /**
    * Future: Send welcome email after user completes registration
    * TODO: Implement when needed
    */
@@ -93,32 +196,6 @@ De Bedrijfsfiscalist Team
     logger.info('Welcome email (not implemented)', { email, userName });
     // TODO: Implement welcome email
   }
-
-  // TODO: Implement real email provider integration
-  // private async sendViaProvider(to: string, subject: string, content: string): Promise<void> {
-  //   // Example for SendGrid:
-  //   // const sgMail = require('@sendgrid/mail');
-  //   // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  //   // await sgMail.send({
-  //   //   to,
-  //   //   from: 'noreply@debedrijfsfiscalist.com',
-  //   //   subject,
-  //   //   text: content,
-  //   //   html: this.convertToHtml(content),
-  //   // });
-  //
-  //   // Example for AWS SES:
-  //   // const AWS = require('aws-sdk');
-  //   // const ses = new AWS.SES({ region: process.env.AWS_SES_REGION });
-  //   // await ses.sendEmail({
-  //   //   Source: 'noreply@debedrijfsfiscalist.com',
-  //   //   Destination: { ToAddresses: [to] },
-  //   //   Message: {
-  //   //     Subject: { Data: subject },
-  //   //     Body: { Text: { Data: content } },
-  //   //   },
-  //   // }).promise();
-  // }
 }
 
 // Export singleton instance

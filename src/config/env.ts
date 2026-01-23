@@ -97,6 +97,18 @@ export const env = {
     signedUrlTtlSeconds: parseInt(getOptionalEnv('DOCUMENTS_SIGNED_URL_TTL_SECONDS') || '300', 10),
     previewSignedUrlTtlSeconds: parseInt(getOptionalEnv('DOCUMENTS_PREVIEW_SIGNED_URL_TTL_SECONDS') || '300', 10),
   },
+  
+  // Email
+  email: {
+    provider: getOptionalEnv('EMAIL_PROVIDER') || 'console',
+    from: getOptionalEnv('EMAIL_FROM') || 'noreply@debedrijfsfiscalist.com',
+    sendgridApiKey: getOptionalEnv('SENDGRID_API_KEY'),
+  },
+  
+  // Notifications
+  notifications: {
+    adminNotificationEmails: getOptionalEnv('ADMIN_NOTIFICATION_EMAILS')?.split(',').map(e => e.trim()) || [],
+  },
 };
 
 // Validate environment on module load

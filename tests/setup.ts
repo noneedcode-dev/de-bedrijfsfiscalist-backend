@@ -13,6 +13,17 @@ beforeAll(() => {
   process.env.APP_API_KEY = process.env.APP_API_KEY || 'test-api-key';
 });
 
+// TRIPWIRE: Prevent real Supabase client creation in tests
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: () => {
+    throw new Error(
+      'TEST MUST NOT CREATE REAL SUPABASE CLIENT. ' +
+      'All production code must use src/lib/supabaseClient exports (createSupabaseAdminClient/createSupabaseUserClient). ' +
+      'Tests must mock these exports, not bypass them.'
+    );
+  },
+}));
+
 // Mock Supabase client to prevent network calls
 vi.mock('../src/lib/supabaseClient', () => {
   const mockSupabaseClient = {

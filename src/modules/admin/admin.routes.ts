@@ -11,6 +11,7 @@ import { invitationService } from '../../services/invitationService';
 import { auditLogService } from '../../services/auditLogService';
 import { provisioningService } from '../../services/provisioningService';
 import { AuditActions } from '../../constants/auditActions';
+import { ErrorCodes } from '../../constants/errorCodes';
 
 export const adminRouter = Router();
 
@@ -1164,6 +1165,241 @@ adminRouter.get(
         limit,
         offset,
         timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * @openapi
+ * /api/admin/messages/export:
+ *   get:
+ *     summary: Export messages as CSV
+ *     description: Export messages within a date range with streaming CSV output
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start date (ISO 8601)
+ *       - in: query
+ *         name: to
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End date (ISO 8601)
+ *       - in: query
+ *         name: client_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Optional client filter
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [csv]
+ *           default: csv
+ *         description: Export format (only CSV supported)
+ *     responses:
+ *       200:
+ *         description: CSV file stream
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *       422:
+ *         description: Validation error (date range > 31 days or row count > 100k)
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ */
+adminRouter.get(
+  '/messages/export',
+  [
+    query('from')
+      .isISO8601()
+      .withMessage('from must be a valid ISO 8601 date'),
+    query('to')
+      .isISO8601()
+      .withMessage('to must be a valid ISO 8601 date'),
+    query('client_id')
+      .optional()
+      .isUUID()
+      .withMessage('client_id must be a valid UUID'),
+    query('format')
+      .optional()
+      .isIn(['csv'])
+      .withMessage('format must be csv'),
+    handleValidationErrors,
+  ],
+  asyncHandler(async (req: Request, res: Response) => {
+    const { from, to, client_id, format = 'csv' } = req.query;
+    const actorUserId = req.user?.sub;
+
+    if (!actorUserId) {
+      throw AppError.fromCode(ErrorCodes.UNAUTHORIZED, 401);
+    }
+
+    // Validate date range (max 31 days)
+    const fromDate = new Date(from as string);
+    const toDate = new Date(to as string);
+    const daysDiff = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (daysDiff > 31) {
+      throw AppError.fromCode(ErrorCodes.VALIDATION_FAILED, 422, {
+        message: 'Date range cannot exceed 31 days',
+        max_days: 31,
+        requested_days: daysDiff,
+      });
+    }
+
+    if (fromDate > toDate) {
+      throw AppError.fromCode(ErrorCodes.VALIDATION_FAILED, 422, {
+        message: 'from date must be before to date',
+      });
+    }
+
+    const supabase = createSupabaseAdminClient();
+
+    // Count total rows first
+    let countQuery = supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', from as string)
+      .lte('created_at', to as string);
+
+    if (client_id) {
+      countQuery = countQuery.eq('client_id', client_id as string);
+    }
+
+    const { count, error: countError } = await countQuery;
+
+    if (countError) {
+      throw new AppError('Failed to count messages', 500, ErrorCodes.INTERNAL_ERROR, countError);
+    }
+
+    if (count && count > 100000) {
+      throw AppError.fromCode(ErrorCodes.VALIDATION_FAILED, 422, {
+        message: 'Result set too large',
+        max_rows: 100000,
+        actual_rows: count,
+      });
+    }
+
+    // Set response headers for CSV download
+    const filename = `messages_export_${fromDate.toISOString().split('T')[0]}_${toDate.toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Dynamic import csv-stringify
+    const { stringify } = await import('csv-stringify');
+
+    const stringifier = stringify({
+      header: true,
+      columns: [
+        { key: 'message_id', header: 'message_id' },
+        { key: 'created_at', header: 'created_at' },
+        { key: 'client_id', header: 'client_id' },
+        { key: 'conversation_id', header: 'conversation_id' },
+        { key: 'sender_user_id', header: 'sender_user_id' },
+        { key: 'sender_role', header: 'sender_role' },
+        { key: 'body', header: 'body' },
+        { key: 'attachment_count', header: 'attachment_count' },
+      ],
+    });
+
+    stringifier.pipe(res);
+
+    // Stream messages in batches
+    const BATCH_SIZE = 2000;
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      let batchQuery = supabase
+        .from('messages')
+        .select('id, created_at, client_id, conversation_id, sender_user_id, sender_role, body')
+        .gte('created_at', from as string)
+        .lte('created_at', to as string)
+        .order('created_at', { ascending: true })
+        .range(offset, offset + BATCH_SIZE - 1);
+
+      if (client_id) {
+        batchQuery = batchQuery.eq('client_id', client_id as string);
+      }
+
+      const { data: messages, error: batchError } = await batchQuery;
+
+      if (batchError) {
+        stringifier.end();
+        throw new AppError('Failed to fetch messages batch', 500, ErrorCodes.INTERNAL_ERROR, batchError);
+      }
+
+      if (!messages || messages.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      // Fetch attachment counts for this batch
+      const messageIds = messages.map((m: any) => m.id);
+      const { data: attachmentCounts } = await supabase
+        .from('message_attachments')
+        .select('message_id')
+        .in('message_id', messageIds);
+
+      const attachmentCountMap = new Map<string, number>();
+      if (attachmentCounts) {
+        for (const att of attachmentCounts as any[]) {
+          attachmentCountMap.set(
+            att.message_id,
+            (attachmentCountMap.get(att.message_id) || 0) + 1
+          );
+        }
+      }
+
+      // Write batch to CSV
+      for (const msg of messages as any[]) {
+        stringifier.write({
+          message_id: msg.id,
+          created_at: msg.created_at,
+          client_id: msg.client_id,
+          conversation_id: msg.conversation_id,
+          sender_user_id: msg.sender_user_id,
+          sender_role: msg.sender_role,
+          body: msg.body,
+          attachment_count: attachmentCountMap.get(msg.id) || 0,
+        });
+      }
+
+      offset += BATCH_SIZE;
+      hasMore = messages.length === BATCH_SIZE;
+    }
+
+    stringifier.end();
+
+    // Audit log
+    auditLogService.logAsync({
+      client_id: (client_id as string) || undefined,
+      actor_user_id: actorUserId,
+      actor_role: 'admin',
+      action: AuditActions.EXPORT_MESSAGES,
+      entity_type: 'message',
+      entity_id: undefined,
+      metadata: {
+        from: from as string,
+        to: to as string,
+        client_id: (client_id as string) || undefined,
+        row_count: count || 0,
+        format,
       },
     });
   })

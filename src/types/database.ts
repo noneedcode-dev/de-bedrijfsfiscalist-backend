@@ -84,6 +84,32 @@ export interface DbCompany {
   updated_at: string;
 }
 
+export interface DbClientConversation {
+  id: string;
+  client_id: string;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+}
+
+export interface DbMessage {
+  id: string;
+  client_id: string;
+  conversation_id: string;
+  sender_user_id: string;
+  sender_role: 'admin' | 'client';
+  body: string;
+  created_at: string;
+}
+
+export interface DbMessageAttachment {
+  id: string;
+  message_id: string;
+  client_id: string;
+  document_id: string;
+  created_at: string;
+}
+
 /**
  * Extended client type with related users
  * Used when include_users=true in GET /api/admin/clients

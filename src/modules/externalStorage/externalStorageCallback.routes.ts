@@ -32,15 +32,19 @@ externalStorageCallbackRouter.get(
     try {
       decoded = jwt.verify(state, env.supabase.jwtSecret);
     } catch (error) {
-      throw AppError.fromCode(ErrorCodes.VALIDATION_FAILED, 400, {
-        message: 'Invalid or expired state',
-      });
+      throw new AppError(
+        'Invalid or expired state',
+        400,
+        ErrorCodes.VALIDATION_FAILED
+      );
     }
 
     if (decoded.provider !== provider) {
-      throw AppError.fromCode(ErrorCodes.VALIDATION_FAILED, 400, {
-        message: 'Provider mismatch',
-      });
+      throw new AppError(
+        'Provider mismatch',
+        400,
+        ErrorCodes.VALIDATION_FAILED
+      );
     }
 
     const clientId = decoded.clientId;

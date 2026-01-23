@@ -23,6 +23,7 @@ import { externalStorageClientRouter } from './modules/externalStorage/externalS
 import { externalStorageCallbackRouter } from './modules/externalStorage/externalStorageCallback.routes';
 import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
+import messagesRouter from './modules/messages/messages.routes';
 
 export function createApp() {
   // Env check
@@ -93,6 +94,7 @@ export function createApp() {
   clientRouter.use('/tax/function', taxFunctionRouter);
   clientRouter.use('/documents', documentsRouter);
   clientRouter.use('/external-storage', externalStorageClientRouter);
+  clientRouter.use('/messages', messagesRouter);
 
   app.use('/api/clients/:clientId', authenticateJWT, validateClientAccess, clientRouter);
   
