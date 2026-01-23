@@ -19,6 +19,13 @@ export function apiKeyMiddleware(
     return next();
   }
 
+  // Allowlist: /api/external-storage/callback/* OAuth callback routes don't require API key
+  // because Google/Microsoft redirects cannot include custom headers
+  // State JWT verification is still enforced in the callback handler
+  if (req.path.startsWith('/external-storage/callback/')) {
+    return next();
+  }
+
   const expected = env.auth.apiKey;
 
   // Dev ortamında APP_API_KEY tanımlı değilse kontrolü skip edebilirsin

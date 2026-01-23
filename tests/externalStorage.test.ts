@@ -311,6 +311,19 @@ describe('External Storage (mocked, no DB)', () => {
       // your route returns 400 for invalid state — this is fine:
       expect([400, 422]).toContain(res.status);
     });
+
+    it('callback without x-api-key returns validation error (not AUTH_MISSING_API_KEY)', async () => {
+      // OAuth callback routes should bypass API key check because Google/Microsoft
+      // redirects cannot include custom headers. State JWT verification is still enforced.
+      const res = await request(app)
+        .get('/api/external-storage/callback/google_drive?code=test&state=invalid');
+        // NOTE: No x-api-key header set
+
+      // Should get validation error for invalid state, NOT AUTH_MISSING_API_KEY
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+      expect(res.body.code).not.toBe('AUTH_MISSING_API_KEY');
+    });
   });
 
   describe('Connection Management', () => {
