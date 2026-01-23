@@ -157,6 +157,8 @@ externalStorageCallbackRouter.get(
       },
     });
 
-    return res.redirect(`${env.frontendUrl}/clients/${clientId}/settings?external_storage_connected=${provider}`);
+    // Normalize FRONTEND_URL by removing trailing slashes to avoid double //
+    const normalizedFrontendUrl = env.frontendUrl.replace(/\/+$/, '');
+    return res.redirect(`${normalizedFrontendUrl}/google_drive?external_storage_connected=${provider}&client_id=${clientId}`);
   })
 );
