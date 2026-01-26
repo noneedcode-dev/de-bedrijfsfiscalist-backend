@@ -771,13 +771,30 @@ documentsRouter.post(
       });
     }
 
-    // Step 6: Check if external storage mirroring is enabled (non-blocking)
+    // Step 6: Check if external storage connection is ready for mirroring (non-blocking)
     try {
       const { externalStorageService } = await import('../externalStorage/externalStorageService');
-      const mirrorSettings = await externalStorageService.getMirrorSettings(clientId);
+      const provider = 'google_drive';
+      const connection = await externalStorageService.getConnection(clientId, provider);
       
-      if (mirrorSettings.enabled && mirrorSettings.provider) {
-        await externalStorageService.enqueueUploadJob(clientId, docId, mirrorSettings.provider);
+      if (!connection) {
+        logger.info('External upload skipped: no google_drive connection', { 
+          clientId, 
+          documentId: docId 
+        });
+      } else if (connection.status !== 'connected') {
+        logger.info('External upload skipped: connection not connected', { 
+          clientId, 
+          documentId: docId, 
+          status: connection.status 
+        });
+      } else if (!connection.root_folder_id) {
+        logger.info('External upload skipped: root_folder_id missing', { 
+          clientId, 
+          documentId: docId 
+        });
+      } else {
+        await externalStorageService.enqueueUploadJob(clientId, docId, provider);
         
         auditLogService.logAsync({
           client_id: clientId,
@@ -787,7 +804,7 @@ documentsRouter.post(
           entity_type: 'document',
           entity_id: docId,
           metadata: {
-            provider: mirrorSettings.provider,
+            provider,
           },
         });
       }
