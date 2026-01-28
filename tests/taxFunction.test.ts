@@ -120,11 +120,10 @@ describe('Tax Function API', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.columns).toEqual([
       { key: 'process', label: 'Process' },
-      { key: 'description', label: 'Description' },
-      { key: 'responsible_party', label: 'Responsible Party' },
-      { key: 'frequency', label: 'Frequency' },
-      { key: 'deadline', label: 'Deadline' },
-      { key: 'status', label: 'Status' },
+      { key: 'r', label: 'R' },
+      { key: 'a', label: 'A' },
+      { key: 'c', label: 'C' },
+      { key: 'i', label: 'I' },
       { key: 'notes', label: 'Notes' },
     ]);
   });
@@ -552,20 +551,39 @@ describe('Tax Function API', () => {
       expect(res.body.data.rows).toHaveLength(1);
     });
 
-    it('POST - Client can import to own client_id', async () => {
+    it('POST - Client cannot import to own client_id (403 - admin only)', async () => {
       const validToken = generateToken({ 
         sub: 'user123', 
         role: 'client',
         client_id: MOCK_CLIENT_ID
       });
       
-      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
-      vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
-      
       const res = await request(app)
         .post(`/api/clients/${MOCK_CLIENT_ID}/tax/function/import`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${validToken}`)
+        .send({ 
+          rows: [{ row_index: 0, cells: { process: 'Test' } }], 
+          mode: 'replace' 
+        });
+      
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('AUTH_INSUFFICIENT_PERMISSIONS');
+    });
+
+    it('POST - Admin can import (client role blocked)', async () => {
+      const adminToken = generateToken({ 
+        sub: 'admin123', 
+        role: 'admin'
+      });
+      
+      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
+      vi.spyOn(supabaseClient, 'createSupabaseAdminClient').mockReturnValue(mockSupabase as any);
+      
+      const res = await request(app)
+        .post(`/api/clients/${MOCK_CLIENT_ID}/tax/function/import`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({ 
           rows: [{ row_index: 0, cells: { process: 'Test' } }], 
           mode: 'replace' 
@@ -632,11 +650,10 @@ describe('Tax Function API', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.columns).toEqual([
         { key: 'process', label: 'Process' },
-        { key: 'description', label: 'Description' },
-        { key: 'responsible_party', label: 'Responsible Party' },
-        { key: 'frequency', label: 'Frequency' },
-        { key: 'deadline', label: 'Deadline' },
-        { key: 'status', label: 'Status' },
+        { key: 'r', label: 'R' },
+        { key: 'a', label: 'A' },
+        { key: 'c', label: 'C' },
+        { key: 'i', label: 'I' },
         { key: 'notes', label: 'Notes' },
       ]);
     });

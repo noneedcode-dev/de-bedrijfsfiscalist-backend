@@ -5,11 +5,10 @@ export interface TaxFunctionColumn {
 
 export const TAX_FUNCTION_COLUMNS: readonly TaxFunctionColumn[] = [
   { key: 'process', label: 'Process' },
-  { key: 'description', label: 'Description' },
-  { key: 'responsible_party', label: 'Responsible Party' },
-  { key: 'frequency', label: 'Frequency' },
-  { key: 'deadline', label: 'Deadline' },
-  { key: 'status', label: 'Status' },
+  { key: 'r', label: 'R' },
+  { key: 'a', label: 'A' },
+  { key: 'c', label: 'C' },
+  { key: 'i', label: 'I' },
   { key: 'notes', label: 'Notes' },
 ] as const;
 

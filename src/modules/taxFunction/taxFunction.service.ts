@@ -33,11 +33,10 @@ export async function getTaxFunction(
       row_index: row.order_index || 0,
       cells: {
         process: row.process_name,
-        description: row.process_description || '',
-        responsible_party: row.stakeholders?.join(', ') || '',
-        frequency: row.frequency || '',
-        deadline: '',
-        status: '',
+        r: row.stakeholders?.join(', ') || '',
+        a: row.accountable?.join(', ') || '',
+        c: row.consulted?.join(', ') || '',
+        i: row.informed?.join(', ') || '',
         notes: row.notes || '',
       },
     }));
@@ -95,13 +94,28 @@ function validateImportRow(row: any): { valid: boolean; reason?: string } {
 }
 
 function mapCellsToRowInsert(rowIndex: number, cells: any): taxFunctionRowsRepository.TaxFunctionRowInsert {
+  // Helper to parse comma-separated string to array
+  const parseToArray = (value: any): string[] | undefined => {
+    if (!value) return undefined;
+    if (typeof value === 'string') {
+      return value.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+    }
+    return undefined;
+  };
+
+  // Support both new (r/a/c/i) and legacy (responsible_party) keys
+  const rValue = cells.r || cells.responsible_party;
+
   return {
     order_index: rowIndex,
     process_name: cells.process || '',
     process_description: cells.description || undefined,
-    stakeholders: cells.responsible_party ? cells.responsible_party.split(',').map((s: string) => s.trim()) : undefined,
+    stakeholders: parseToArray(rValue),
     frequency: cells.frequency || undefined,
     notes: cells.notes || undefined,
+    accountable: parseToArray(cells.a),
+    consulted: parseToArray(cells.c),
+    informed: parseToArray(cells.i),
   };
 }
 
@@ -159,6 +173,9 @@ export interface CreateRowInput {
   stakeholders?: string[];
   frequency?: string;
   notes?: string;
+  accountable?: string[];
+  consulted?: string[];
+  informed?: string[];
 }
 
 export interface UpdateRowInput {
@@ -168,6 +185,9 @@ export interface UpdateRowInput {
   stakeholders?: string[];
   frequency?: string;
   notes?: string;
+  accountable?: string[];
+  consulted?: string[];
+  informed?: string[];
 }
 
 export interface ReorderUpdate {
@@ -192,6 +212,9 @@ export async function createRow(
     stakeholders: payload.stakeholders,
     frequency: payload.frequency,
     notes: payload.notes,
+    accountable: payload.accountable,
+    consulted: payload.consulted,
+    informed: payload.informed,
   };
 
   return await taxFunctionRowsRepository.insertOne(scope, rowData);

@@ -5,6 +5,7 @@ import { asyncHandler, AppError } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import * as taxFunctionService from './taxFunction.service';
 import { ErrorCodes } from '../../constants/errorCodes';
+import { requireRole } from '../auth/auth.middleware';
 
 export const taxFunctionRouter = Router({ mergeParams: true });
 
@@ -107,6 +108,7 @@ taxFunctionRouter.get(
 
 taxFunctionRouter.post(
   '/import',
+  requireRole('admin'),
   [
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     body('rows').isArray().withMessage('rows must be an array'),
@@ -199,6 +201,7 @@ taxFunctionRouter.post(
  */
 taxFunctionRouter.post(
   '/rows',
+  requireRole('admin'),
   [
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     body('order_index')
@@ -217,7 +220,7 @@ taxFunctionRouter.post(
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
     const clientId = req.params.clientId;
-    const { order_index, process_name, process_description, stakeholders, frequency, notes } = req.body;
+    const { order_index, process_name, process_description, stakeholders, frequency, notes, accountable, consulted, informed } = req.body;
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
@@ -239,6 +242,17 @@ taxFunctionRouter.post(
       }
     }
 
+    // Normalize accountable, consulted, informed
+    const normalizeField = (value: any): string[] | undefined => {
+      if (value === undefined) return undefined;
+      if (Array.isArray(value)) {
+        return value.filter((s: any) => typeof s === 'string');
+      } else if (typeof value === 'string') {
+        return value.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      }
+      return undefined;
+    };
+
     const payload: taxFunctionService.CreateRowInput = {
       order_index,
       process_name,
@@ -246,6 +260,9 @@ taxFunctionRouter.post(
       stakeholders: normalizedStakeholders,
       frequency,
       notes,
+      accountable: normalizeField(accountable),
+      consulted: normalizeField(consulted),
+      informed: normalizeField(informed),
     };
 
     const result = await taxFunctionService.createRow(supabase, clientId, payload, isAdminBypass);
@@ -311,6 +328,7 @@ taxFunctionRouter.post(
  */
 taxFunctionRouter.patch(
   '/rows/reorder',
+  requireRole('admin'),
   [
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     body('updates')
@@ -424,6 +442,7 @@ taxFunctionRouter.patch(
  */
 taxFunctionRouter.patch(
   '/rows/:id',
+  requireRole('admin'),
   [
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     param('id').isUUID().withMessage('Invalid id format'),
@@ -444,7 +463,7 @@ taxFunctionRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const clientId = req.params.clientId;
     const id = req.params.id;
-    const { order_index, process_name, process_description, stakeholders, frequency, notes } = req.body;
+    const { order_index, process_name, process_description, stakeholders, frequency, notes, accountable, consulted, informed } = req.body;
 
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
@@ -466,6 +485,17 @@ taxFunctionRouter.patch(
       }
     }
 
+    // Normalize accountable, consulted, informed
+    const normalizeField = (value: any): string[] | undefined => {
+      if (value === undefined) return undefined;
+      if (Array.isArray(value)) {
+        return value.filter((s: any) => typeof s === 'string');
+      } else if (typeof value === 'string') {
+        return value.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      }
+      return undefined;
+    };
+
     const patch: taxFunctionService.UpdateRowInput = {};
     if (order_index !== undefined) patch.order_index = order_index;
     if (process_name !== undefined) patch.process_name = process_name;
@@ -473,6 +503,9 @@ taxFunctionRouter.patch(
     if (normalizedStakeholders !== undefined) patch.stakeholders = normalizedStakeholders;
     if (frequency !== undefined) patch.frequency = frequency;
     if (notes !== undefined) patch.notes = notes;
+    if (accountable !== undefined) patch.accountable = normalizeField(accountable);
+    if (consulted !== undefined) patch.consulted = normalizeField(consulted);
+    if (informed !== undefined) patch.informed = normalizeField(informed);
 
     const result = await taxFunctionService.updateRow(supabase, clientId, id, patch, isAdminBypass);
 
@@ -522,6 +555,7 @@ taxFunctionRouter.patch(
  */
 taxFunctionRouter.delete(
   '/rows/:id',
+  requireRole('admin'),
   [
     param('clientId').isUUID().withMessage('Invalid clientId format'),
     param('id').isUUID().withMessage('Invalid id format'),

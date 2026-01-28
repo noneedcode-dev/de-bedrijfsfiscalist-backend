@@ -525,15 +525,12 @@ describe('Tax Function Rows CRUD API', () => {
   });
 
   describe('Tenant Isolation', () => {
-    it('POST - Client can create row in own client_id', async () => {
+    it('POST - Client cannot create row (403 - admin only)', async () => {
       const validToken = generateToken({
         sub: 'user123',
         role: 'client',
         client_id: MOCK_CLIENT_ID,
       });
-
-      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
-      vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
         .post(`/api/clients/${MOCK_CLIENT_ID}/tax/function/rows`)
@@ -541,18 +538,16 @@ describe('Tax Function Rows CRUD API', () => {
         .set('Authorization', `Bearer ${validToken}`)
         .send({ order_index: 0, process_name: 'Test' });
 
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('AUTH_INSUFFICIENT_PERMISSIONS');
     });
 
-    it('PATCH - Client can update row in own client_id', async () => {
+    it('PATCH - Client cannot update row (403 - admin only)', async () => {
       const validToken = generateToken({
         sub: 'user123',
         role: 'client',
         client_id: MOCK_CLIENT_ID,
       });
-
-      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
-      vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
         .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/function/rows/${MOCK_ROW_ID}`)
@@ -560,36 +555,32 @@ describe('Tax Function Rows CRUD API', () => {
         .set('Authorization', `Bearer ${validToken}`)
         .send({ process_name: 'Updated' });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('AUTH_INSUFFICIENT_PERMISSIONS');
     });
 
-    it('DELETE - Client can delete row in own client_id', async () => {
+    it('DELETE - Client cannot delete row (403 - admin only)', async () => {
       const validToken = generateToken({
         sub: 'user123',
         role: 'client',
         client_id: MOCK_CLIENT_ID,
       });
-
-      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
-      vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
         .delete(`/api/clients/${MOCK_CLIENT_ID}/tax/function/rows/${MOCK_ROW_ID}`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${validToken}`);
 
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('AUTH_INSUFFICIENT_PERMISSIONS');
     });
 
-    it('REORDER - Client can reorder rows in own client_id', async () => {
+    it('REORDER - Client cannot reorder rows (403 - admin only)', async () => {
       const validToken = generateToken({
         sub: 'user123',
         role: 'client',
         client_id: MOCK_CLIENT_ID,
       });
-
-      const mockSupabase = createMockQueryBuilder({ data: [], error: null });
-      vi.spyOn(supabaseClient, 'createSupabaseUserClient').mockReturnValue(mockSupabase as any);
 
       const res = await request(app)
         .patch(`/api/clients/${MOCK_CLIENT_ID}/tax/function/rows/reorder`)
@@ -599,7 +590,8 @@ describe('Tax Function Rows CRUD API', () => {
           updates: [{ id: MOCK_ROW_ID, order_index: 0 }],
         });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('AUTH_INSUFFICIENT_PERMISSIONS');
     });
 
     it('Admin can access any client_id', async () => {

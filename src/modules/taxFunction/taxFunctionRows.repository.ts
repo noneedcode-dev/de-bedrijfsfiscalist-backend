@@ -11,6 +11,9 @@ export interface TaxFunctionRow {
   stakeholders?: string[];
   frequency?: string;
   notes?: string;
+  accountable?: string[];
+  consulted?: string[];
+  informed?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +25,9 @@ export interface TaxFunctionRowInsert {
   stakeholders?: string[];
   frequency?: string;
   notes?: string;
+  accountable?: string[];
+  consulted?: string[];
+  informed?: string[];
 }
 
 export async function getAllByClient(
@@ -67,6 +73,9 @@ export async function insertMany(
     stakeholders: row.stakeholders,
     frequency: row.frequency,
     notes: row.notes,
+    accountable: row.accountable,
+    consulted: row.consulted,
+    informed: row.informed,
   }));
 
   const { data, error } = await scope.supabase
@@ -93,6 +102,9 @@ export async function insertOne(
     stakeholders: row.stakeholders,
     frequency: row.frequency,
     notes: row.notes,
+    accountable: row.accountable,
+    consulted: row.consulted,
+    informed: row.informed,
   };
 
   const { data, error } = await scope.supabase
@@ -123,6 +135,9 @@ export async function updateById(
   if (updates.stakeholders !== undefined) updateData.stakeholders = updates.stakeholders;
   if (updates.frequency !== undefined) updateData.frequency = updates.frequency;
   if (updates.notes !== undefined) updateData.notes = updates.notes;
+  if (updates.accountable !== undefined) updateData.accountable = updates.accountable;
+  if (updates.consulted !== undefined) updateData.consulted = updates.consulted;
+  if (updates.informed !== undefined) updateData.informed = updates.informed;
 
   const { data, error } = await scope.supabase
     .from('tax_function_rows')
