@@ -554,3 +554,172 @@ taxCalendarRouter.get(
   })
 );
 
+/**
+ * @openapi
+ * /api/clients/{clientId}/tax/calendar/tables:
+ *   get:
+ *     summary: Get tax calendar tables with rows
+ *     description: Retrieve tax calendar tables with their rows and dynamic columns for UI rendering
+ *     tags:
+ *       - Tax Calendar
+ *     security:
+ *       - ApiKeyAuth: []
+ *         BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
+ *     responses:
+ *       200:
+ *         description: List of tables with rows and columns
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+taxCalendarRouter.get(
+  '/tables',
+  [param('clientId').isUUID().withMessage('Invalid clientId format')],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId;
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
+    }
+
+    const supabase = getSupabase(req, token);
+
+    const result = await taxCalendarService.getTables(supabase, clientId);
+
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.TAX_CALENDAR_TABLES_VIEWED,
+      entity_type: 'tax_calendar',
+      entity_id: clientId,
+      metadata: {
+        tables_count: result.meta.count,
+        total_rows: result.meta.total_rows,
+      },
+    });
+
+    res.json(result);
+  })
+);
+
+/**
+ * @openapi
+ * /api/clients/{clientId}/tax/calendar/import:
+ *   post:
+ *     summary: Import tax calendar data (admin only)
+ *     description: Replace all tax calendar data for a client with new data from Excel/CSV
+ *     tags:
+ *       - Tax Calendar
+ *     security:
+ *       - ApiKeyAuth: []
+ *         BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Client ID
+ *       - in: query
+ *         name: mode
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [replace]
+ *         description: Import mode (currently only 'replace' is supported)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tables:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *     responses:
+ *       200:
+ *         description: Import successful
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         $ref: '#/components/responses/ForbiddenError'
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+taxCalendarRouter.post(
+  '/import',
+  [
+    param('clientId').isUUID().withMessage('Invalid clientId format'),
+    query('mode').equals('replace').withMessage('Only replace mode is supported'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId;
+    const { mode } = req.query;
+
+    if (req.user?.role !== 'admin') {
+      throw AppError.fromCode(ErrorCodes.AUTH_INSUFFICIENT_PERMISSIONS, 403);
+    }
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      throw AppError.fromCode(ErrorCodes.AUTH_MISSING_HEADER, 401);
+    }
+
+    const supabase = getSupabase(req, token);
+
+    const payload = req.body as taxCalendarService.ImportPayload;
+
+    if (!payload.tables || !Array.isArray(payload.tables)) {
+      throw new AppError('Invalid payload: tables array is required', 422);
+    }
+
+    const result = await taxCalendarService.replaceImport(supabase, clientId, payload);
+
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.TAX_CALENDAR_IMPORTED,
+      entity_type: 'tax_calendar',
+      entity_id: clientId,
+      metadata: {
+        mode,
+        tables_count: result.tables_count,
+        rows_count: result.rows_count,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: result,
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+

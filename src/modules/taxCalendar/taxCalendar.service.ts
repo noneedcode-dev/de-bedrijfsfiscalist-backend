@@ -57,12 +57,12 @@ export async function listEntries(
   pagination: PaginationOptions
 ) {
   let countQuery = supabase
-    .from('tax_return_calendar_entries')
+    .from('tax_calendar_entries_v2')
     .select('*', { count: 'exact', head: true })
     .eq('client_id', clientId);
 
   let query = supabase
-    .from('tax_return_calendar_entries')
+    .from('tax_calendar_entries_v2')
     .select('*')
     .eq('client_id', clientId);
 
@@ -129,7 +129,7 @@ export async function getSummary(
   options: SummaryOptions
 ) {
   let query = supabase
-    .from('tax_return_calendar_entries')
+    .from('tax_calendar_entries_v2')
     .select('status, deadline, tax_type')
     .eq('client_id', clientId);
 
@@ -267,7 +267,7 @@ export async function getUpcoming(
   const to = isoDateInTZ(DEFAULT_TZ, addMonths(new Date(), options.months));
 
   let query = supabase
-    .from('tax_return_calendar_entries')
+    .from('tax_calendar_entries_v2')
     .select('*')
     .eq('client_id', clientId)
     .gte('deadline', from)
@@ -313,4 +313,97 @@ export async function getUpcoming(
       timestamp: new Date().toISOString(),
     },
   };
+}
+
+export async function getTables(
+  supabase: SupabaseClient,
+  clientId: string
+) {
+  const { data: tables, error: tablesError } = await supabase
+    .from('tax_calendar_tables')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('table_order', { ascending: true });
+
+  if (tablesError) {
+    throw new AppError(
+      `Failed to fetch tax calendar tables: ${tablesError.message}`,
+      500
+    );
+  }
+
+  const tablesWithRows = await Promise.all(
+    (tables || []).map(async (table: any) => {
+      const { data: rows, error: rowsError } = await supabase
+        .from('tax_calendar_rows')
+        .select('*')
+        .eq('table_id', table.id)
+        .order('row_order', { ascending: true })
+        .order('deadline', { ascending: true });
+
+      if (rowsError) {
+        throw new AppError(
+          `Failed to fetch rows for table ${table.id}: ${rowsError.message}`,
+          500
+        );
+      }
+
+      return {
+        ...table,
+        rows: rows || [],
+      };
+    })
+  );
+
+  return {
+    data: tablesWithRows,
+    meta: {
+      count: tablesWithRows.length,
+      total_rows: tablesWithRows.reduce((sum, t) => sum + t.rows.length, 0),
+      timestamp: new Date().toISOString(),
+    },
+  };
+}
+
+export interface ImportPayload {
+  tables: Array<{
+    jurisdiction: string;
+    tax_type: string;
+    title: string;
+    table_order?: number;
+    columns: Array<{
+      key: string;
+      label: string;
+      type: string;
+      order: number;
+    }>;
+    rows: Array<{
+      entity_name: string;
+      period_label: string;
+      deadline: string;
+      status?: string;
+      row_order?: number;
+      fields: Record<string, any>;
+    }>;
+  }>;
+}
+
+export async function replaceImport(
+  supabase: SupabaseClient,
+  clientId: string,
+  payload: ImportPayload
+) {
+  const { data, error } = await supabase.rpc('tax_calendar_replace_import', {
+    p_client_id: clientId,
+    p_payload: payload as any,
+  });
+
+  if (error) {
+    throw new AppError(
+      `Failed to import tax calendar: ${error.message}`,
+      500
+    );
+  }
+
+  return data;
 }

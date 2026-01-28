@@ -30,7 +30,7 @@ CREATE POLICY "Users can view exports for their client"
     client_id IN (
       SELECT client_id 
       FROM app_users 
-      WHERE user_id = auth.uid()
+      WHERE id = auth.uid()
     )
   );
 
@@ -42,7 +42,7 @@ CREATE POLICY "Users can create exports for their client"
     client_id IN (
       SELECT client_id 
       FROM app_users 
-      WHERE user_id = auth.uid()
+      WHERE id = auth.uid()
     )
   );
 
