@@ -37,7 +37,8 @@ CREATE POLICY "tax_risk_matrix_entries_client_select_own"
 ON public.tax_risk_matrix_entries
 FOR SELECT
 USING (
-  public.is_client() AND client_id = public.current_client_id()
+  auth.jwt() ->> 'role' = 'client'
+  AND client_id = (auth.jwt() ->> 'client_id')::uuid
 );
 
 -- RLS Policies: Only admins can modify matrix entries
@@ -45,8 +46,8 @@ CREATE POLICY "tax_risk_matrix_entries_admin_full_access"
 ON public.tax_risk_matrix_entries
 FOR ALL
 USING (
-  public.is_admin()
+  auth.jwt() ->> 'role' = 'admin'
 )
 WITH CHECK (
-  public.is_admin()
+  auth.jwt() ->> 'role' = 'admin'
 );

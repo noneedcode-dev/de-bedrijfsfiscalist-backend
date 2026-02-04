@@ -80,6 +80,15 @@ export const ErrorCodes = {
   RATE_LIMIT_INVITE_EXCEEDED: 'RATE_LIMIT_INVITE_EXCEEDED',
   RATE_LIMIT_PASSWORD_RESET_EXCEEDED: 'RATE_LIMIT_PASSWORD_RESET_EXCEEDED',
 
+  // Time Tracking
+  TIME_ENTRY_NOT_FOUND: 'TIME_ENTRY_NOT_FOUND',
+  TIME_ENTRY_CREATE_FAILED: 'TIME_ENTRY_CREATE_FAILED',
+  TIME_ENTRY_UPDATE_FAILED: 'TIME_ENTRY_UPDATE_FAILED',
+  TIME_ENTRY_DELETE_FAILED: 'TIME_ENTRY_DELETE_FAILED',
+  TIME_TIMER_ALREADY_RUNNING: 'TIME_TIMER_ALREADY_RUNNING',
+  TIME_TIMER_NOT_RUNNING: 'TIME_TIMER_NOT_RUNNING',
+  TIME_ALLOWANCE_NOT_FOUND: 'TIME_ALLOWANCE_NOT_FOUND',
+
   // General
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -170,6 +179,15 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   RATE_LIMIT_AUTH_EXCEEDED: 'Authentication rate limit exceeded',
   RATE_LIMIT_INVITE_EXCEEDED: 'Invitation rate limit exceeded',
   RATE_LIMIT_PASSWORD_RESET_EXCEEDED: 'Password reset rate limit exceeded',
+
+  // Time Tracking
+  TIME_ENTRY_NOT_FOUND: 'Time entry not found',
+  TIME_ENTRY_CREATE_FAILED: 'Failed to create time entry',
+  TIME_ENTRY_UPDATE_FAILED: 'Failed to update time entry',
+  TIME_ENTRY_DELETE_FAILED: 'Failed to delete time entry',
+  TIME_TIMER_ALREADY_RUNNING: 'Timer is already running for this advisor',
+  TIME_TIMER_NOT_RUNNING: 'No active timer found for this advisor',
+  TIME_ALLOWANCE_NOT_FOUND: 'Time allowance not found for this client',
 
   // General
   NOT_FOUND: 'Resource not found',

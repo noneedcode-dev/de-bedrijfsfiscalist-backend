@@ -64,11 +64,7 @@ CREATE POLICY "Admin users can manage all preview jobs"
   FOR ALL
   TO authenticated
   USING (
-    EXISTS (
-      SELECT 1 FROM public.app_users
-      WHERE app_users.user_id = auth.uid()
-      AND app_users.role = 'admin'
-    )
+    auth.jwt() ->> 'role' = 'admin'
   );
 
 -- Client users can view their own client's preview jobs
@@ -77,11 +73,8 @@ CREATE POLICY "Client users can view their preview jobs"
   FOR SELECT
   TO authenticated
   USING (
-    EXISTS (
-      SELECT 1 FROM public.app_users
-      WHERE app_users.user_id = auth.uid()
-      AND app_users.client_id = document_preview_jobs.client_id
-    )
+    auth.jwt() ->> 'role' = 'client'
+    AND client_id = (auth.jwt() ->> 'client_id')::uuid
   );
 
 -- ============================================================================
