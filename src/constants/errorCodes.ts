@@ -89,6 +89,27 @@ export const ErrorCodes = {
   TIME_TIMER_NOT_RUNNING: 'TIME_TIMER_NOT_RUNNING',
   TIME_ALLOWANCE_NOT_FOUND: 'TIME_ALLOWANCE_NOT_FOUND',
 
+  // Plans
+  PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
+  PLAN_CONFIG_UPDATE_FAILED: 'PLAN_CONFIG_UPDATE_FAILED',
+  PLAN_ASSIGNMENT_FAILED: 'PLAN_ASSIGNMENT_FAILED',
+  PLAN_INVALID_DATE_RANGE: 'PLAN_INVALID_DATE_RANGE',
+  PLAN_RETROACTIVE_NOT_ALLOWED: 'PLAN_RETROACTIVE_NOT_ALLOWED',
+
+  // Invoices
+  INVOICE_NOT_FOUND: 'INVOICE_NOT_FOUND',
+  INVOICE_CREATE_FAILED: 'INVOICE_CREATE_FAILED',
+  INVOICE_UPDATE_FAILED: 'INVOICE_UPDATE_FAILED',
+  INVOICE_INVALID_STATUS: 'INVOICE_INVALID_STATUS',
+  INVOICE_PROOF_UPLOAD_FAILED: 'INVOICE_PROOF_UPLOAD_FAILED',
+  INVOICE_ALREADY_REVIEWED: 'INVOICE_ALREADY_REVIEWED',
+  INVOICE_NUMBER_GENERATION_FAILED: 'INVOICE_NUMBER_GENERATION_FAILED',
+
+  // Allowance
+  ALLOWANCE_NOT_FOUND: 'ALLOWANCE_NOT_FOUND',
+  ALLOWANCE_CREATE_FAILED: 'ALLOWANCE_CREATE_FAILED',
+  ALLOWANCE_EXCEEDED: 'ALLOWANCE_EXCEEDED',
+
   // General
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -188,6 +209,27 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   TIME_TIMER_ALREADY_RUNNING: 'Timer is already running for this advisor',
   TIME_TIMER_NOT_RUNNING: 'No active timer found for this advisor',
   TIME_ALLOWANCE_NOT_FOUND: 'Time allowance not found for this client',
+
+  // Plans
+  PLAN_NOT_FOUND: 'Plan not found',
+  PLAN_CONFIG_UPDATE_FAILED: 'Failed to update plan configuration',
+  PLAN_ASSIGNMENT_FAILED: 'Failed to assign plan to client',
+  PLAN_INVALID_DATE_RANGE: 'Invalid plan date range',
+  PLAN_RETROACTIVE_NOT_ALLOWED: 'Retroactive plan changes beyond grace period are not allowed',
+
+  // Invoices
+  INVOICE_NOT_FOUND: 'Invoice not found',
+  INVOICE_CREATE_FAILED: 'Failed to create invoice',
+  INVOICE_UPDATE_FAILED: 'Failed to update invoice',
+  INVOICE_INVALID_STATUS: 'Invalid invoice status for this operation',
+  INVOICE_PROOF_UPLOAD_FAILED: 'Failed to upload invoice proof',
+  INVOICE_ALREADY_REVIEWED: 'Invoice has already been reviewed',
+  INVOICE_NUMBER_GENERATION_FAILED: 'Failed to generate invoice number',
+
+  // Allowance
+  ALLOWANCE_NOT_FOUND: 'Monthly allowance not found',
+  ALLOWANCE_CREATE_FAILED: 'Failed to create monthly allowance',
+  ALLOWANCE_EXCEEDED: 'Monthly allowance exceeded',
 
   // General
   NOT_FOUND: 'Resource not found',

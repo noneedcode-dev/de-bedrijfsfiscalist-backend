@@ -7,7 +7,10 @@ export interface TimeEntry {
   client_id: string;
   advisor_user_id: string;
   entry_date: string;
+  worked_at: string;
   minutes: number;
+  free_minutes_consumed: number;
+  billable_minutes: number;
   task?: string;
   is_billable: boolean;
   source: 'manual' | 'timer' | 'import';
@@ -113,32 +116,65 @@ export async function getMonthlySummary(
 ): Promise<MonthlySummary> {
   const targetYearMonth = yearMonth || getCurrentYearMonth();
   const [year, month] = targetYearMonth.split('-');
-  const startDate = `${year}-${month}-01`;
+  const periodStart = `${year}-${month}-01`;
   const endDate = getMonthEndDate(parseInt(year), parseInt(month));
 
+  // Get allowance from new ledger table
   const { data: allowanceData, error: allowanceError } = await supabase
-    .from('client_time_allowances')
-    .select('included_minutes_monthly')
+    .from('client_monthly_allowances')
+    .select('free_minutes_total, free_minutes_used')
     .eq('client_id', clientId)
+    .eq('period_start', periodStart)
     .maybeSingle();
 
   if (allowanceError) {
     throw new AppError(
-      `Failed to fetch time allowance: ${allowanceError.message}`,
+      `Failed to fetch monthly allowance: ${allowanceError.message}`,
       500,
       ErrorCodes.INTERNAL_ERROR
     );
   }
 
-  const includedMinutes = allowanceData?.included_minutes_monthly || 0;
+  // If no allowance record exists yet, get current plan to determine total
+  let includedMinutes = 0;
+  let usedFreeMinutes = 0;
 
+  if (allowanceData) {
+    includedMinutes = allowanceData.free_minutes_total;
+    usedFreeMinutes = allowanceData.free_minutes_used;
+  } else {
+    // No entries yet this month - get current plan
+    const { data: currentPlan } = await supabase
+      .from('client_plans')
+      .select('plan_code')
+      .eq('client_id', clientId)
+      .lte('effective_from', periodStart)
+      .or(`effective_to.is.null,effective_to.gte.${periodStart}`)
+      .order('effective_from', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (currentPlan) {
+      const { data: planConfig } = await supabase
+        .from('plan_configs')
+        .select('free_minutes_monthly')
+        .eq('plan_code', currentPlan.plan_code)
+        .single();
+
+      if (planConfig) {
+        includedMinutes = planConfig.free_minutes_monthly;
+      }
+    }
+  }
+
+  // Calculate billable minutes from time_entries
   const { data: entriesData, error: entriesError } = await supabase
     .from('time_entries')
-    .select('minutes')
+    .select('minutes, billable_minutes')
     .eq('client_id', clientId)
     .is('deleted_at', null)
-    .gte('entry_date', startDate)
-    .lte('entry_date', endDate);
+    .gte('worked_at', periodStart)
+    .lte('worked_at', endDate);
 
   if (entriesError) {
     throw new AppError(
@@ -148,14 +184,14 @@ export async function getMonthlySummary(
     );
   }
 
-  const usedMinutes = (entriesData || []).reduce((sum, entry) => sum + entry.minutes, 0);
-  const remainingMinutes = Math.max(0, includedMinutes - usedMinutes);
-  const billableMinutes = Math.max(0, usedMinutes - includedMinutes);
+  const totalMinutes = (entriesData || []).reduce((sum, entry) => sum + entry.minutes, 0);
+  const billableMinutes = (entriesData || []).reduce((sum, entry) => sum + entry.billable_minutes, 0);
+  const remainingMinutes = Math.max(0, includedMinutes - usedFreeMinutes);
 
   return {
     year_month: targetYearMonth,
     included_minutes_monthly: includedMinutes,
-    used_minutes: usedMinutes,
+    used_minutes: totalMinutes,
     remaining_included_minutes: remainingMinutes,
     billable_minutes: billableMinutes,
   };
@@ -173,22 +209,19 @@ export async function createTimeEntry(
     );
   }
 
-  const insertData = {
-    client_id: params.clientId,
-    advisor_user_id: params.advisorUserId,
-    entry_date: params.entryDate,
-    minutes: params.minutes,
-    task: params.task || null,
-    is_billable: params.isBillable !== undefined ? params.isBillable : true,
-    source: params.source || 'manual',
-    created_by: params.createdBy || null,
-  };
-
-  const { data, error } = await supabase
-    .from('time_entries')
-    .insert(insertData)
-    .select()
-    .single();
+  // Use RPC function for concurrency-safe allowance consumption
+  const { data, error } = await supabase.rpc(
+    'consume_allowance_and_insert_time_entry',
+    {
+      p_client_id: params.clientId,
+      p_worked_at: params.entryDate,
+      p_minutes: params.minutes,
+      p_task: params.task || null,
+      p_advisor_user_id: params.advisorUserId,
+      p_source: params.source || 'manual',
+      p_created_by: params.createdBy || null,
+    }
+  );
 
   if (error) {
     throw new AppError(
@@ -198,7 +231,16 @@ export async function createTimeEntry(
     );
   }
 
-  return data;
+  // RPC returns JSONB with structure: { time_entry, allowance_consumed, billable_minutes, period_start, plan_code }
+  const result = data as {
+    time_entry: TimeEntry;
+    allowance_consumed: number;
+    billable_minutes: number;
+    period_start: string;
+    plan_code: string;
+  };
+
+  return result.time_entry;
 }
 
 export async function updateTimeEntry(

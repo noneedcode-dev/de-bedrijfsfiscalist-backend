@@ -12,6 +12,9 @@ import { auditLogService } from '../../services/auditLogService';
 import { provisioningService } from '../../services/provisioningService';
 import { AuditActions } from '../../constants/auditActions';
 import { ErrorCodes } from '../../constants/errorCodes';
+import * as planConfigsService from '../planConfigs/planConfigs.service';
+import * as clientPlansService from '../clientPlans/clientPlans.service';
+import * as invoicesService from '../invoices/invoices.service';
 
 export const adminRouter = Router();
 
@@ -1400,6 +1403,485 @@ adminRouter.get(
         client_id: (client_id as string) || undefined,
         row_count: count || 0,
         format,
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/plan-configs
+ * List all plan configurations
+ */
+adminRouter.get(
+  '/plan-configs',
+  [
+    query('active_only')
+      .optional()
+      .isBoolean()
+      .toBoolean()
+      .withMessage('active_only must be a boolean'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const activeOnly = (req.query.active_only as unknown as boolean) === true;
+    const supabase = createSupabaseAdminClient();
+
+    const planConfigs = await planConfigsService.listPlanConfigs(supabase, {
+      activeOnly,
+    });
+
+    return res.json({
+      data: planConfigs,
+      meta: {
+        count: planConfigs.length,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/plan-configs/:planCode
+ * Get a specific plan configuration
+ */
+adminRouter.get(
+  '/plan-configs/:planCode',
+  [
+    param('planCode')
+      .isIn(['NONE', 'BASIC', 'PRO'])
+      .withMessage('planCode must be NONE, BASIC, or PRO'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { planCode } = req.params;
+    const supabase = createSupabaseAdminClient();
+
+    const planConfig = await planConfigsService.getPlanConfig(
+      supabase,
+      planCode as 'NONE' | 'BASIC' | 'PRO'
+    );
+
+    return res.json({
+      data: planConfig,
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * PATCH /api/admin/plan-configs/:planCode
+ * Update a plan configuration
+ */
+adminRouter.patch(
+  '/plan-configs/:planCode',
+  [
+    param('planCode')
+      .isIn(['NONE', 'BASIC', 'PRO'])
+      .withMessage('planCode must be NONE, BASIC, or PRO'),
+    body('display_name')
+      .optional()
+      .isString()
+      .trim()
+      .notEmpty()
+      .withMessage('display_name must be a non-empty string'),
+    body('free_minutes_monthly')
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage('free_minutes_monthly must be a non-negative integer'),
+    body('hourly_rate_eur')
+      .optional()
+      .isDecimal()
+      .withMessage('hourly_rate_eur must be a decimal number'),
+    body('is_active')
+      .optional()
+      .isBoolean()
+      .withMessage('is_active must be a boolean'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { planCode } = req.params;
+    const { display_name, free_minutes_monthly, hourly_rate_eur, is_active } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    const updatedConfig = await planConfigsService.updatePlanConfig(supabase, {
+      planCode: planCode as 'NONE' | 'BASIC' | 'PRO',
+      updates: {
+        display_name,
+        free_minutes_monthly,
+        hourly_rate_eur,
+        is_active,
+      },
+    });
+
+    // Audit log
+    auditLogService.logAsync({
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.PLAN_CONFIG_UPDATED,
+      entity_type: 'plan_config',
+      entity_id: planCode,
+      metadata: {
+        plan_code: planCode,
+        updates: {
+          display_name,
+          free_minutes_monthly,
+          hourly_rate_eur,
+          is_active,
+        },
+      },
+    });
+
+    return res.json({
+      data: updatedConfig,
+      meta: {
+        message: 'Plan configuration updated successfully',
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * POST /api/admin/clients/:clientId/plan-assignments
+ * Assign a plan to a client
+ */
+adminRouter.post(
+  '/clients/:clientId/plan-assignments',
+  [
+    param('clientId').isUUID().withMessage('clientId must be a valid UUID'),
+    body('plan_code')
+      .isIn(['NONE', 'BASIC', 'PRO'])
+      .withMessage('plan_code must be NONE, BASIC, or PRO'),
+    body('effective_from')
+      .isDate()
+      .withMessage('effective_from must be a valid date (YYYY-MM-DD)'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId } = req.params;
+    const { plan_code, effective_from } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    // Verify client exists
+    const { data: client, error: clientError } = await supabase
+      .from('clients')
+      .select('id, name')
+      .eq('id', clientId)
+      .single();
+
+    if (clientError || !client) {
+      throw new AppError('Client not found', 404, ErrorCodes.CLIENT_NOT_FOUND);
+    }
+
+    const result = await clientPlansService.assignPlan(supabase, {
+      clientId,
+      planCode: plan_code,
+      effectiveFrom: effective_from,
+      assignedBy: req.user?.sub,
+    });
+
+    // Audit log
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: result.previousPlan
+        ? AuditActions.CLIENT_PLAN_CHANGED
+        : AuditActions.CLIENT_PLAN_ASSIGNED,
+      entity_type: 'client_plan',
+      entity_id: result.newPlan.id,
+      metadata: {
+        client_name: client.name,
+        previous_plan: result.previousPlan
+          ? {
+              plan_code: result.previousPlan.plan_code,
+              effective_to: result.previousPlan.effective_to,
+            }
+          : null,
+        new_plan: {
+          plan_code: result.newPlan.plan_code,
+          effective_from: result.newPlan.effective_from,
+        },
+      },
+    });
+
+    return res.status(201).json({
+      data: {
+        previous_plan: result.previousPlan,
+        new_plan: result.newPlan,
+      },
+      meta: {
+        message: 'Plan assigned successfully',
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/clients/:clientId/plan-assignments
+ * Get plan assignment history for a client
+ */
+adminRouter.get(
+  '/clients/:clientId/plan-assignments',
+  [param('clientId').isUUID().withMessage('clientId must be a valid UUID')],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId } = req.params;
+    const supabase = createSupabaseAdminClient();
+
+    const planHistory = await clientPlansService.listPlanHistory(supabase, clientId);
+
+    // Audit log
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.CLIENT_PLAN_HISTORY_VIEWED,
+      entity_type: 'client_plan',
+      metadata: {
+        history_count: planHistory.length,
+      },
+    });
+
+    return res.json({
+      data: planHistory,
+      meta: {
+        count: planHistory.length,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/clients/:clientId/plan
+ * Get current plan for a client
+ */
+adminRouter.get(
+  '/clients/:clientId/plan',
+  [param('clientId').isUUID().withMessage('clientId must be a valid UUID')],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId } = req.params;
+    const supabase = createSupabaseAdminClient();
+
+    const currentPlan = await clientPlansService.getCurrentPlan(supabase, clientId);
+
+    return res.json({
+      data: currentPlan,
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * POST /api/admin/clients/:clientId/invoices
+ * Create an invoice for a client
+ */
+adminRouter.post(
+  '/clients/:clientId/invoices',
+  [
+    param('clientId').isUUID().withMessage('clientId must be a valid UUID'),
+    body('title').isString().trim().notEmpty().withMessage('title is required'),
+    body('description').optional().isString().trim(),
+    body('currency').optional().isString().trim(),
+    body('amount_total').isDecimal().withMessage('amount_total must be a decimal number'),
+    body('due_date').isDate().withMessage('due_date must be a valid date'),
+    body('period_start').optional().isDate().withMessage('period_start must be a valid date'),
+    body('period_end').optional().isDate().withMessage('period_end must be a valid date'),
+    body('auto_calculate').optional().isBoolean().withMessage('auto_calculate must be a boolean'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId } = req.params;
+    const {
+      title,
+      description,
+      currency,
+      amount_total,
+      due_date,
+      period_start,
+      period_end,
+      auto_calculate,
+    } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    const invoice = await invoicesService.createInvoice(supabase, {
+      clientId,
+      title,
+      description,
+      currency,
+      amountTotal: amount_total,
+      dueDate: due_date,
+      periodStart: period_start,
+      periodEnd: period_end,
+      autoCalculate: auto_calculate,
+      createdBy: req.user?.sub,
+    });
+
+    // Audit log
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.INVOICE_CREATED,
+      entity_type: 'invoice',
+      entity_id: invoice.id,
+      metadata: {
+        invoice_no: invoice.invoice_no,
+        title: invoice.title,
+        amount_total: invoice.amount_total,
+        due_date: invoice.due_date,
+        period_start: invoice.period_start,
+        period_end: invoice.period_end,
+        auto_calculated: auto_calculate,
+        billable_minutes_snapshot: invoice.billable_minutes_snapshot,
+      },
+    });
+
+    return res.status(201).json({
+      data: invoice,
+      meta: {
+        message: 'Invoice created successfully',
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/invoices
+ * List all invoices (admin-wide view)
+ */
+adminRouter.get(
+  '/invoices',
+  [
+    query('client_id').optional().isUUID().withMessage('client_id must be a valid UUID'),
+    query('status')
+      .optional()
+      .isIn(['OPEN', 'REVIEW', 'PAID', 'CANCELLED'])
+      .withMessage('status must be OPEN, REVIEW, PAID, or CANCELLED'),
+    query('from').optional().isISO8601().withMessage('from must be a valid ISO 8601 date'),
+    query('to').optional().isISO8601().withMessage('to must be a valid ISO 8601 date'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage('limit must be between 1 and 100')
+      .toInt(),
+    query('offset')
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage('offset must be a non-negative integer')
+      .toInt(),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.query.client_id as string | undefined;
+    const status = req.query.status as 'OPEN' | 'REVIEW' | 'PAID' | 'CANCELLED' | undefined;
+    const fromDate = req.query.from as string | undefined;
+    const toDate = req.query.to as string | undefined;
+    const limit = typeof req.query.limit === 'number' ? req.query.limit : 20;
+    const offset = typeof req.query.offset === 'number' ? req.query.offset : 0;
+
+    const supabase = createSupabaseAdminClient();
+
+    const { data, count } = await invoicesService.listInvoices(supabase, {
+      clientId,
+      status,
+      fromDate,
+      toDate,
+      limit,
+      offset,
+    });
+
+    return res.json({
+      data,
+      meta: {
+        total: count,
+        limit,
+        offset,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/invoices/:invoiceId
+ * Get a specific invoice (admin view)
+ */
+adminRouter.get(
+  '/invoices/:invoiceId',
+  [param('invoiceId').isUUID().withMessage('invoiceId must be a valid UUID')],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { invoiceId } = req.params;
+    const supabase = createSupabaseAdminClient();
+
+    const invoice = await invoicesService.getInvoice(supabase, invoiceId);
+
+    return res.json({
+      data: invoice,
+      meta: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * POST /api/admin/invoices/:invoiceId/decision
+ * Approve or cancel an invoice
+ */
+adminRouter.post(
+  '/invoices/:invoiceId/decision',
+  [
+    param('invoiceId').isUUID().withMessage('invoiceId must be a valid UUID'),
+    body('decision')
+      .isIn(['approve', 'cancel'])
+      .withMessage('decision must be approve or cancel'),
+    body('review_note').optional().isString().trim(),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { invoiceId } = req.params;
+    const { decision, review_note } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    const updatedInvoice = await invoicesService.reviewInvoice(supabase, {
+      invoiceId,
+      decision,
+      reviewNote: review_note,
+      reviewedBy: req.user?.sub,
+    });
+
+    // Audit log
+    auditLogService.logAsync({
+      client_id: updatedInvoice.client_id,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: decision === 'approve' ? AuditActions.INVOICE_APPROVED : AuditActions.INVOICE_CANCELLED,
+      entity_type: 'invoice',
+      entity_id: invoiceId,
+      metadata: {
+        invoice_no: updatedInvoice.invoice_no,
+        decision,
+        review_note,
+        previous_status: 'REVIEW',
+        new_status: updatedInvoice.status,
+      },
+    });
+
+    return res.json({
+      data: updatedInvoice,
+      meta: {
+        message: `Invoice ${decision === 'approve' ? 'approved' : 'cancelled'} successfully`,
+        timestamp: new Date().toISOString(),
       },
     });
   })

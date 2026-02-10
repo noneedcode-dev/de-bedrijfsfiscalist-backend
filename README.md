@@ -1,320 +1,177 @@
-# De Bedrijfsfiscalist – Backend v1
+# Supabase CLI
 
-Bu backend, De Bedrijfsfiscalist portalının tüm kompleks iş mantığını, entegrasyonlarını ve veri işlemlerini yönetir.
+[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
+](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
 
-## Hızlı Başlangıç
+[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
-### Kurulum
+This repository contains all the functionality for Supabase CLI.
 
-```bash
-# Bağımlılıkları yükle
-npm install
+- [x] Running Supabase locally
+- [x] Managing database migrations
+- [x] Creating and deploying Supabase Functions
+- [x] Generating types directly from your database schema
+- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
-# .env dosyasını oluştur (gerekli env değişkenlerini ekle)
-cp .env.example .env
-```
+## Getting started
 
-### Geliştirme
+### Install the CLI
 
-```bash
-# Development mode (nodemon ile hot reload)
-npm run dev
-```
-
-### Production
+Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
 
 ```bash
-# TypeScript'i derle
-npm run build
-
-# Derlenmiş kodu çalıştır
-npm start
+npm i supabase --save-dev
 ```
 
-### Linting
+When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
+
+```
+NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+```
+
+> **Note**
+For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
+
+<details>
+  <summary><b>macOS</b></summary>
+
+  Available via [Homebrew](https://brew.sh). To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To install the beta release channel:
+  
+  ```sh
+  brew install supabase/tap/supabase-beta
+  brew link --overwrite supabase-beta
+  ```
+  
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Windows</b></summary>
+
+  Available via [Scoop](https://scoop.sh). To install:
+
+  ```powershell
+  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+  scoop install supabase
+  ```
+
+  To upgrade:
+
+  ```powershell
+  scoop update supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Linux</b></summary>
+
+  Available via [Homebrew](https://brew.sh) and Linux packages.
+
+  #### via Homebrew
+
+  To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+
+  #### via Linux packages
+
+  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
+
+  ```sh
+  sudo apk add --allow-untrusted <...>.apk
+  ```
+
+  ```sh
+  sudo dpkg -i <...>.deb
+  ```
+
+  ```sh
+  sudo rpm -i <...>.rpm
+  ```
+
+  ```sh
+  sudo pacman -U <...>.pkg.tar.zst
+  ```
+</details>
+
+<details>
+  <summary><b>Other Platforms</b></summary>
+
+  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
+
+  ```sh
+  go install github.com/supabase/cli@latest
+  ```
+
+  Add a symlink to the binary in `$PATH` for easier access:
+
+  ```sh
+  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
+  ```
+
+  This works on other non-standard Linux distros.
+</details>
+
+<details>
+  <summary><b>Community Maintained Packages</b></summary>
+
+  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
+  To install in your working directory:
+
+  ```bash
+  pkgx install supabase
+  ```
+
+  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
+</details>
+
+### Run the CLI
 
 ```bash
-# Kodu kontrol et
-npm run lint
-
-# Hataları otomatik düzelt
-npm run lint:fix
+supabase bootstrap
 ```
 
-### Testing
+Or using npx:
 
 ```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
+npx supabase bootstrap
 ```
 
-Server başarıyla başlatıldığında:
-- 📍 http://localhost:3000 - Ana endpoint
-- 📍 http://localhost:3000/health - Health check endpoint
-- 📚 http://localhost:3000/api-docs - API Documentation (Development/Staging only)
+The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
 
----
+## Docs
 
-## API Documentation
+Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
 
-Interactive API documentation is available via Swagger UI in development and staging environments:
+## Breaking changes
 
-- **URL:** `http://localhost:3000/api-docs`
-- **Environment:** Development and Staging only (not available in production)
-- **Features:**
-  - Interactive API explorer
-  - Request/response schemas
-  - Authentication examples
-  - Try-it-out functionality
+We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
 
-### Postman Collection
+However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
 
-A Postman collection is available at `postman_collection.json` with:
-- All API endpoints
-- Authentication examples
-- Positive and negative test cases
-- Environment variables template
+## Developing
 
-Import the collection into Postman or Thunder Client and set these variables:
-- `baseUrl`: `http://localhost:3000`
-- `apiKey`: Your `APP_API_KEY`
-- `jwtToken`: Valid JWT token from Supabase
-- `clientId`: Valid client UUID
+To run from source:
 
----
-
-## Logging
-
-The application uses Winston for structured logging with different outputs based on environment:
-
-### Development
-- **Console output:** Colorized, human-readable format
-- **Log level:** Debug
-
-### Production
-- **Console output:** JSON format for log aggregation
-- **File outputs:**
-  - `logs/combined-YYYY-MM-DD.log` - All logs (30 days retention, 20MB max per file)
-  - `logs/error-YYYY-MM-DD.log` - Error logs only (14 days retention)
-  - `logs/exceptions-YYYY-MM-DD.log` - Unhandled exceptions
-  - `logs/rejections-YYYY-MM-DD.log` - Unhandled promise rejections
-- **Log level:** Info
-
-### Log Structure
-```json
-{
-  "timestamp": "2025-12-02T10:30:00.000Z",
-  "level": "info",
-  "message": "Request completed",
-  "method": "GET",
-  "url": "/api/clients/123/tax/calendar",
-  "status": 200,
-  "duration": "45ms",
-  "ip": "127.0.0.1"
-}
-```
-
----
-
-## Security
-
-### Authentication & Authorization
-
-The API uses a multi-layer security approach:
-
-1. **API Key Authentication** (`x-api-key` header)
-   - Required for all `/api/*` endpoints
-   - Validates that requests come from authorized clients (e.g., Bubble frontend)
-
-2. **JWT Authentication** (Bearer token)
-   - Required for all `/api/*` endpoints
-   - Validates user identity and role
-   - Issued by Supabase authentication
-
-3. **Role-Based Access Control**
-   - **Admin role:** Full access to all clients
-   - **Client role:** Access only to their own `client_id`
-
-### Security Headers
-
-Helmet.js is configured to provide security headers:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: SAMEORIGIN`
-- `X-XSS-Protection: 1; mode=block`
-- `Strict-Transport-Security` (production only)
-- Content Security Policy (production only)
-
-### Rate Limiting
-
-Rate limits are applied per IP address:
-
-| Endpoint | Limit | Window |
-|----------|-------|--------|
-| `/health` | 60 requests | 1 minute |
-| `/api/*` | 100 requests | 15 minutes |
-| Auth endpoints | 20 requests | 15 minutes |
-
-Rate limit responses return `429 Too Many Requests` with retry information in headers:
-- `RateLimit-Limit`: Maximum requests allowed
-- `RateLimit-Remaining`: Requests remaining
-- `RateLimit-Reset`: Time when limit resets
-
-### Error Responses
-
-All errors follow a standardized format:
-
-```json
-{
-  "error": "Unauthorized",
-  "message": "Invalid or missing API key",
-  "statusCode": 401,
-  "timestamp": "2025-12-02T10:30:00.000Z"
-}
-```
-
----
-
-- Tüm **tax logic** (risk, calendar, control framework) burada çalışır.
-- Dosya upload & ingestion (Excel → Supabase) burada yapılır.
-- Supabase, güvenli multi-tenant veri deposu olarak kullanılır.
-- Bubble frontend, bu backend'e REST API üzerinden bağlanır.
-
----
-
-## Teknoloji Stack
-
-- **Runtime:** Node.js (LTS)
-- **Dil:** TypeScript
-- **Framework:** Express (veya benzeri HTTP framework)
-- **DB:** Supabase (Postgres + RLS, EU region)
-- **Auth:** JWT (user context) + API key (Bubble ↔ Backend)
-- **Queue / Jobs:** (v1 için) cron tabanlı job'lar veya basit scheduler
-- **External Servisler:**
-  - Google Drive (future: SharePoint)
-  - S3 (Bubble file storage)
-  - E-posta (SendGrid, vs.)
-
----
-
-## Mimari Genel Bakış
-
-Backend modüllere ayrılmıştır:
-
-1. **Auth & Security**
-   - Bubble'dan gelen istekleri `x-api-key` ile doğrular.
-   - Kullanıcı context'ini temsil eden JWT üretir / doğrular (`sub`, `role`, `client_id`).
-   - Supabase'e giderken bu JWT ile RLS devreye alınır.
-
-2. **Clients & Users**
-   - `clients`: müşteri firmalar
-   - `app_users`: admin ve client kullanıcılar
-   - Onboarding sırasında client + kullanıcı oluşturma iş akışı
-
-3. **Files & Ingestion**
-   - `/files/upload-from-url`: Bubble file URL → Drive/S3 → `documents` kaydı
-   - `/tax/risk-control/import`: Excel dosyasından `tax_risk_control_rows` tablosunu doldurma (örnek endpoint'i aşağıda)
-
-4. **Tax Modules**
-   - **Tax Return Calendar**
-     - `tax_return_calendar_entries` tablosunu yönetir.
-     - Yaklaşan 3 aylık deadline'ları listeler.
-   - **Tax Risk Matrix**
-     - `tax_risk_matrix_entries`
-     - Risk skorlarını ve renklerini hesaplar.
-   - **Tax Risk Control Sheet**
-     - `tax_risk_control_rows`
-     - Excel ingestion + backend hesaplamaları (inherent_score, color, vs.)
-   - **Tax Function**
-     - `tax_function_rows`
-     - Süreç tanımı, sorumlular, sıklık bilgileri
-
-5. **Audit & Logging**
-   - `audit_log`: mesaj, dosya indirme, config değişikliği vb. aksiyonların kaydı
-   - Opsiyonel: harici log sistemi (Sentry, vs.)
-
-6. **Jobs & Scheduler**
-   - Günlük/haftalık:
-     - Risk skorları recalculation
-     - Yaklaşan deadline'lar için notification üretimi
-   - Service role ile Supabase'e erişir (RLS bypass).
-
----
-
-## Environment Değişkenleri
-
-### Supabase
-
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SUPABASE_JWT_SECRET` (kendi Supabase JWT'ni üretmek istersen)
-
-### Backend Auth
-
-- `APP_JWT_SECRET`       – Bubble ↔ Backend JWT'leri için
-- `APP_JWT_ISSUER`       – (opsiyonel) `de-bedrijfsfiscalist-backend`
-- `APP_JWT_AUDIENCE`     – (opsiyonel) `frontend` / `bubble`
-- `APP_API_KEY`          – Bubble'ın backend'e gelirken kullandığı sabit key
-
-### Dosya & Entegrasyonlar
-
-- `GOOGLE_APPLICATION_CREDENTIALS` veya `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`
-- `S3_BUCKET_NAME`
-- `S3_ACCESS_KEY_ID`
-- `S3_SECRET_ACCESS_KEY`
-- `S3_REGION`
-
-### Bildirimler (opsiyonel)
-
-- `SENDGRID_API_KEY`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SIGNING_SECRET`
-
-### Diğer
-
-- `NODE_ENV` = `development` / `production`
-- `PORT`     = default 3000
-- `LOG_LEVEL` = `info` / `debug` / `error`
-- `FRONTEND_URL` = Frontend URL for invitation emails (e.g., `https://version-test.yourapp.bubbleapps.io` for Bubble.io)
-
----
-
-## Klasör Yapısı (Öneri)
-
-```txt
-src/
-  index.ts                # app bootstrap
-  config/
-    env.ts                # env okumaları
-  lib/
-    supabaseClient.ts     # supabaseAdmin + createSupabaseUserClient
-    excel.ts              # ortak excel parse helper'ları
-    jwt.ts                # backend JWT işlevleri
-  modules/
-    auth/
-      auth.controller.ts
-      auth.service.ts
-    clients/
-      clients.controller.ts
-      clients.service.ts
-    files/
-      files.controller.ts
-      files.service.ts
-    tax/
-      calendar.controller.ts
-      calendar.service.ts
-      riskControl.controller.ts
-      riskControl.service.ts
-      riskMatrix.controller.ts
-      riskMatrix.service.ts
-      function.controller.ts
-      function.service.ts
-    audit/
-      audit.service.ts
-  jobs/
-    recalculateRiskScores.job.ts
-  routes.ts               # tüm route tanımları
+```sh
+# Go >= 1.22
+go run . help
 ```

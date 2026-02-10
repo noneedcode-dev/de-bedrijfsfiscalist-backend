@@ -1,0 +1,86 @@
+{
+  "tables": [
+    {
+      "jurisdiction": "NL",
+      "tax_type": "Dutch Corporate Income Tax",
+      "title": "Corporate Income Tax",
+      "table_order": 1,
+      "columns": [
+        {"key": "entity_name", "label": "Entity", "type": "text", "order": 1},
+        {"key": "period_label", "label": "Tax Period", "type": "text", "order": 2},
+        {"key": "deadline", "label": "Filing deadline", "type": "date", "order": 3},
+        {"key": "status", "label": "Status", "type": "select", "order": 4},
+        {"key": "extension_regime", "label": "Extension regime", "type": "text", "order": 5},
+        {"key": "preliminary_assessment", "label": "Preliminary assessment", "type": "text", "order": 6},
+        {"key": "tax_interest", "label": "Tax interest", "type": "number", "order": 7},
+        {"key": "remarks", "label": "Remarks", "type": "multiline", "order": 8}
+      ],
+      "rows": [
+        {
+          "entity_name": "Holding B.V.",
+          "period_label": "2024",
+          "deadline": "2025-06-01",
+          "status": "pending",
+          "row_order": 1,
+          "fields": {
+            "extension_regime": "Becon-regeling",
+            "preliminary_assessment": "Yes, paid timely",
+            "tax_interest": 0,
+            "remarks": "Annual return for fiscal year 2024"
+          }
+        },
+        {
+          "entity_name": "Operating B.V.",
+          "period_label": "2024",
+          "deadline": "2025-06-01",
+          "status": "in_progress",
+          "row_order": 2,
+          "fields": {
+            "extension_regime": "Standard",
+            "preliminary_assessment": "Yes, paid timely",
+            "tax_interest": 1250,
+            "remarks": "Additional payment required"
+          }
+        }
+      ]
+    },
+    {
+      "jurisdiction": "NL",
+      "tax_type": "Dutch Wage Tax",
+      "title": "Wage Tax & Social Security",
+      "table_order": 2,
+      "columns": [
+        {"key": "entity_name", "label": "Entity", "type": "text", "order": 1},
+        {"key": "period_label", "label": "Period", "type": "text", "order": 2},
+        {"key": "deadline", "label": "Filing deadline", "type": "date", "order": 3},
+        {"key": "status", "label": "Status", "type": "select", "order": 4},
+        {"key": "payment_status", "label": "Payment status", "type": "text", "order": 5},
+        {"key": "amount_due", "label": "Amount due", "type": "number", "order": 6}
+      ],
+      "rows": [
+        {
+          "entity_name": "Operating B.V.",
+          "period_label": "2025-01",
+          "deadline": "2025-02-28",
+          "status": "done",
+          "row_order": 1,
+          "fields": {
+            "payment_status": "Paid",
+            "amount_due": 45000
+          }
+        },
+        {
+          "entity_name": "Operating B.V.",
+          "period_label": "2025-02",
+          "deadline": "2025-03-31",
+          "status": "pending",
+          "row_order": 2,
+          "fields": {
+            "payment_status": "Not yet paid",
+            "amount_due": 47500
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -111,6 +111,107 @@ export interface DbMessageAttachment {
 }
 
 /**
+ * Plan code enum
+ */
+export type PlanCode = 'NONE' | 'BASIC' | 'PRO';
+
+/**
+ * Invoice status enum
+ */
+export type InvoiceStatus = 'OPEN' | 'REVIEW' | 'PAID' | 'CANCELLED';
+
+/**
+ * Plan configuration
+ */
+export interface DbPlanConfig {
+  plan_code: PlanCode;
+  display_name: string;
+  free_minutes_monthly: number;
+  hourly_rate_eur: string; // decimal as string
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Client plan assignment (temporal data)
+ */
+export interface DbClientPlan {
+  id: string;
+  client_id: string;
+  plan_code: PlanCode;
+  effective_from: string; // date
+  effective_to: string | null;
+  assigned_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Client monthly allowance ledger
+ */
+export interface DbClientMonthlyAllowance {
+  id: string;
+  client_id: string;
+  period_start: string; // date (YYYY-MM-01)
+  plan_code: PlanCode;
+  free_minutes_total: number;
+  free_minutes_used: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Invoice
+ */
+export interface DbInvoice {
+  id: string;
+  client_id: string;
+  invoice_no: string;
+  title: string;
+  description: string | null;
+  currency: string;
+  amount_total: string; // decimal as string
+  status: InvoiceStatus;
+  due_date: string; // date
+  period_start: string | null; // date
+  period_end: string | null; // date
+  billable_minutes_snapshot: number | null;
+  hourly_rate_snapshot: string | null; // decimal as string
+  invoice_document_id: string | null;
+  proof_document_id: string | null;
+  created_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Time entry (updated with free/billable split)
+ */
+export interface DbTimeEntry {
+  id: string;
+  client_id: string;
+  advisor_user_id: string;
+  entry_date: string; // date (deprecated, use worked_at)
+  worked_at: string; // date
+  minutes: number;
+  free_minutes_consumed: number;
+  billable_minutes: number;
+  task: string | null;
+  is_billable: boolean;
+  source: 'manual' | 'timer' | 'import';
+  created_at: string;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+}
+
+/**
  * Extended client type with related users
  * Used when include_users=true in GET /api/admin/clients
  */

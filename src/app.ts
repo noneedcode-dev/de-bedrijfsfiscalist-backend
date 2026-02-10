@@ -25,6 +25,8 @@ import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
 import messagesRouter from './modules/messages/messages.routes';
 import { timeEntriesRouter } from './modules/timeEntries/timeEntries.routes';
+import { billingRouter } from './modules/billing/billing.routes';
+import { invoicesRouter } from './modules/invoices/invoices.routes';
 
 export function createApp() {
   // Env check
@@ -97,6 +99,8 @@ export function createApp() {
   clientRouter.use('/external-storage', externalStorageClientRouter);
   clientRouter.use('/messages', messagesRouter);
   clientRouter.use('/time-entries', timeEntriesRouter);
+  clientRouter.use('/billing', billingRouter);
+  clientRouter.use('/invoices', invoicesRouter);
 
   app.use('/api/clients/:clientId', authenticateJWT, validateClientAccess, clientRouter);
   
