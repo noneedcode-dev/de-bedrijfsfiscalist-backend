@@ -83,11 +83,11 @@ export async function listTimeEntries(
     .is('deleted_at', null);
 
   if (params.from) {
-    query = query.gte('entry_date', params.from);
+    query = query.gte('worked_at', params.from);
   }
 
   if (params.to) {
-    query = query.lte('entry_date', params.to);
+    query = query.lte('worked_at', params.to);
   }
 
   if (params.advisorUserId) {
@@ -95,7 +95,7 @@ export async function listTimeEntries(
   }
 
   const { data, error, count } = await query
-    .order('entry_date', { ascending: false })
+    .order('worked_at', { ascending: false })
     .range(params.offset, params.offset + params.limit - 1);
 
   if (error) {
@@ -247,30 +247,6 @@ export async function updateTimeEntry(
   supabase: SupabaseClient,
   params: UpdateTimeEntryParams
 ): Promise<TimeEntry> {
-  const { data: existingEntry, error: fetchError } = await supabase
-    .from('time_entries')
-    .select('*')
-    .eq('id', params.entryId)
-    .eq('client_id', params.clientId)
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  if (fetchError) {
-    throw new AppError(
-      `Failed to fetch time entry: ${fetchError.message}`,
-      500,
-      ErrorCodes.INTERNAL_ERROR
-    );
-  }
-
-  if (!existingEntry) {
-    throw new AppError(
-      'Time entry not found',
-      404,
-      ErrorCodes.TIME_ENTRY_NOT_FOUND
-    );
-  }
-
   if (params.updates.minutes !== undefined && params.updates.minutes <= 0) {
     throw new AppError(
       'Minutes must be greater than 0',
@@ -279,30 +255,19 @@ export async function updateTimeEntry(
     );
   }
 
-  const updateData: any = {
-    updated_at: new Date().toISOString(),
-    updated_by: params.updatedBy || null,
-  };
-
-  if (params.updates.minutes !== undefined) {
-    updateData.minutes = params.updates.minutes;
-  }
-  if (params.updates.task !== undefined) {
-    updateData.task = params.updates.task;
-  }
-  if (params.updates.is_billable !== undefined) {
-    updateData.is_billable = params.updates.is_billable;
-  }
-  if (params.updates.entry_date !== undefined) {
-    updateData.entry_date = params.updates.entry_date;
-  }
-
-  const { data, error } = await supabase
-    .from('time_entries')
-    .update(updateData)
-    .eq('id', params.entryId)
-    .select()
-    .single();
+  // Use RPC function for allowance-safe update
+  const { data, error } = await supabase.rpc(
+    'update_time_entry_with_allowance_sync',
+    {
+      p_entry_id: params.entryId,
+      p_client_id: params.clientId,
+      p_new_minutes: params.updates.minutes || null,
+      p_task: params.updates.task || null,
+      p_is_billable: params.updates.is_billable || null,
+      p_entry_date: params.updates.entry_date || null,
+      p_updated_by: params.updatedBy || null,
+    }
+  );
 
   if (error) {
     throw new AppError(
@@ -312,7 +277,17 @@ export async function updateTimeEntry(
     );
   }
 
-  return data;
+  // RPC returns JSONB with structure: { time_entry, allowance_changed, ... }
+  const result = data as {
+    time_entry: TimeEntry;
+    allowance_changed: boolean;
+    old_free_minutes?: number;
+    new_free_minutes?: number;
+    old_billable_minutes?: number;
+    new_billable_minutes?: number;
+  };
+
+  return result.time_entry;
 }
 
 export async function softDeleteTimeEntry(
@@ -321,37 +296,15 @@ export async function softDeleteTimeEntry(
   entryId: string,
   deletedBy?: string
 ): Promise<void> {
-  const { data: existingEntry, error: fetchError } = await supabase
-    .from('time_entries')
-    .select('id')
-    .eq('id', entryId)
-    .eq('client_id', clientId)
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  if (fetchError) {
-    throw new AppError(
-      `Failed to fetch time entry: ${fetchError.message}`,
-      500,
-      ErrorCodes.INTERNAL_ERROR
-    );
-  }
-
-  if (!existingEntry) {
-    throw new AppError(
-      'Time entry not found',
-      404,
-      ErrorCodes.TIME_ENTRY_NOT_FOUND
-    );
-  }
-
-  const { error } = await supabase
-    .from('time_entries')
-    .update({
-      deleted_at: new Date().toISOString(),
-      deleted_by: deletedBy || null,
-    })
-    .eq('id', entryId);
+  // Use RPC function for allowance-safe deletion with refund
+  const { error } = await supabase.rpc(
+    'soft_delete_time_entry_with_allowance_refund',
+    {
+      p_entry_id: entryId,
+      p_client_id: clientId,
+      p_deleted_by: deletedBy || null,
+    }
+  );
 
   if (error) {
     throw new AppError(

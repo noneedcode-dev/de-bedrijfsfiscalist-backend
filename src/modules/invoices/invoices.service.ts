@@ -38,6 +38,23 @@ export interface ReviewInvoiceParams {
   reviewedBy?: string;
 }
 
+export interface MarkInvoicePaidParams {
+  invoiceId: string;
+  clientId: string;
+  paidAt: string;
+  paymentMethod: 'bank_transfer' | 'credit_card' | 'cash' | 'other';
+  paymentReference?: string;
+  paymentNote?: string;
+  reviewedBy?: string;
+}
+
+export interface AttachInvoiceDocumentParams {
+  invoiceId: string;
+  clientId: string;
+  documentId: string;
+  documentType: 'invoice' | 'proof';
+}
+
 export async function createInvoice(
   supabase: SupabaseClient,
   params: CreateInvoiceParams
@@ -326,6 +343,116 @@ export async function reviewInvoice(
   if (updateError) {
     throw new AppError(
       `Failed to review invoice: ${updateError.message}`,
+      500,
+      ErrorCodes.INVOICE_UPDATE_FAILED
+    );
+  }
+
+  return updatedInvoice as DbInvoice;
+}
+
+export async function markInvoiceAsPaid(
+  supabase: SupabaseClient,
+  params: MarkInvoicePaidParams
+): Promise<DbInvoice> {
+  const {
+    invoiceId,
+    clientId,
+    paidAt,
+    paymentMethod,
+    paymentReference,
+    paymentNote,
+    reviewedBy,
+  } = params;
+
+  // Fetch invoice
+  const invoice = await getInvoice(supabase, invoiceId, clientId);
+
+  if (invoice.status === 'PAID') {
+    throw new AppError(
+      'Invoice is already marked as paid',
+      400,
+      ErrorCodes.INVOICE_INVALID_STATUS
+    );
+  }
+
+  if (invoice.status === 'CANCELLED') {
+    throw new AppError(
+      'Cannot mark cancelled invoice as paid',
+      400,
+      ErrorCodes.INVOICE_INVALID_STATUS
+    );
+  }
+
+  const { data: updatedInvoice, error: updateError } = await supabase
+    .from('invoices')
+    .update({
+      status: 'PAID',
+      paid_at: paidAt,
+      payment_method: paymentMethod,
+      payment_reference: paymentReference || null,
+      payment_note: paymentNote || null,
+      reviewed_by: reviewedBy || null,
+      reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', invoiceId)
+    .eq('client_id', clientId)
+    .select()
+    .single();
+
+  if (updateError) {
+    throw new AppError(
+      `Failed to mark invoice as paid: ${updateError.message}`,
+      500,
+      ErrorCodes.INVOICE_UPDATE_FAILED
+    );
+  }
+
+  return updatedInvoice as DbInvoice;
+}
+
+export async function attachInvoiceDocument(
+  supabase: SupabaseClient,
+  params: AttachInvoiceDocumentParams
+): Promise<DbInvoice> {
+  const { invoiceId, clientId, documentId, documentType } = params;
+
+  // Verify document exists and belongs to client
+  const { data: document, error: docError } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('id', documentId)
+    .eq('client_id', clientId)
+    .is('deleted_at', null)
+    .single();
+
+  if (docError || !document) {
+    throw new AppError(
+      'Document not found or does not belong to this client',
+      404,
+      ErrorCodes.DOCUMENT_NOT_FOUND
+    );
+  }
+
+  // Update invoice with document reference
+  const updateField =
+    documentType === 'invoice' ? 'invoice_document_id' : 'proof_document_id';
+
+  const { data: updatedInvoice, error: updateError } = await supabase
+    .from('invoices')
+    .update({
+      [updateField]: documentId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', invoiceId)
+    .eq('client_id', clientId)
+    .select()
+    .single();
+
+  if (updateError) {
+    throw new AppError(
+      `Failed to attach document to invoice: ${updateError.message}`,
       500,
       ErrorCodes.INVOICE_UPDATE_FAILED
     );

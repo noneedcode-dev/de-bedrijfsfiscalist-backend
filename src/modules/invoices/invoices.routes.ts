@@ -162,3 +162,114 @@ invoicesRouter.post(
     });
   })
 );
+
+/**
+ * POST /api/clients/:clientId/invoices/:invoiceId/attach-document
+ * Attach invoice PDF or proof document (admin only)
+ */
+invoicesRouter.post(
+  '/:invoiceId/attach-document',
+  [
+    param('clientId').isUUID().withMessage('clientId must be a valid UUID'),
+    param('invoiceId').isUUID().withMessage('invoiceId must be a valid UUID'),
+    body('document_id').isUUID().withMessage('document_id must be a valid UUID'),
+    body('document_type')
+      .isIn(['invoice', 'proof'])
+      .withMessage('document_type must be invoice or proof'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId, invoiceId } = req.params;
+    const { document_id, document_type } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    const updatedInvoice = await invoicesService.attachInvoiceDocument(supabase, {
+      clientId,
+      invoiceId,
+      documentId: document_id,
+      documentType: document_type,
+    });
+
+    // Audit log
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.INVOICE_UPDATED,
+      entity_type: 'invoice',
+      entity_id: invoiceId,
+      metadata: {
+        invoice_no: updatedInvoice.invoice_no,
+        document_id,
+        document_type,
+      },
+    });
+
+    return res.json({
+      data: updatedInvoice,
+      meta: {
+        message: `${document_type === 'invoice' ? 'Invoice PDF' : 'Proof document'} attached successfully.`,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);
+
+/**
+ * POST /api/clients/:clientId/invoices/:invoiceId/mark-paid
+ * Mark invoice as paid with payment details (admin only)
+ */
+invoicesRouter.post(
+  '/:invoiceId/mark-paid',
+  [
+    param('clientId').isUUID().withMessage('clientId must be a valid UUID'),
+    param('invoiceId').isUUID().withMessage('invoiceId must be a valid UUID'),
+    body('paid_at').isISO8601().withMessage('paid_at must be a valid ISO8601 date'),
+    body('payment_method')
+      .isIn(['bank_transfer', 'credit_card', 'cash', 'other'])
+      .withMessage('payment_method must be bank_transfer, credit_card, cash, or other'),
+    body('payment_reference').optional().isString().withMessage('payment_reference must be a string'),
+    body('payment_note').optional().isString().withMessage('payment_note must be a string'),
+  ],
+  handleValidationErrors,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clientId, invoiceId } = req.params;
+    const { paid_at, payment_method, payment_reference, payment_note } = req.body;
+    const supabase = createSupabaseAdminClient();
+
+    const updatedInvoice = await invoicesService.markInvoiceAsPaid(supabase, {
+      clientId,
+      invoiceId,
+      paidAt: paid_at,
+      paymentMethod: payment_method,
+      paymentReference: payment_reference,
+      paymentNote: payment_note,
+      reviewedBy: req.user?.sub,
+    });
+
+    // Audit log
+    auditLogService.logAsync({
+      client_id: clientId,
+      actor_user_id: req.user?.sub,
+      actor_role: req.user?.role,
+      action: AuditActions.INVOICE_PAID,
+      entity_type: 'invoice',
+      entity_id: invoiceId,
+      metadata: {
+        invoice_no: updatedInvoice.invoice_no,
+        paid_at,
+        payment_method,
+        payment_reference,
+        amount_total: updatedInvoice.amount_total,
+      },
+    });
+
+    return res.json({
+      data: updatedInvoice,
+      meta: {
+        message: 'Invoice marked as paid successfully.',
+        timestamp: new Date().toISOString(),
+      },
+    });
+  })
+);

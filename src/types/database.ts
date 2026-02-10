@@ -184,6 +184,10 @@ export interface DbInvoice {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  paid_at: string | null; // payment date
+  payment_method: 'bank_transfer' | 'credit_card' | 'cash' | 'other' | null;
+  payment_reference: string | null; // transaction reference
+  payment_note: string | null;
   created_at: string;
   updated_at: string;
 }
