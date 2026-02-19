@@ -420,14 +420,21 @@ export async function stopTimer(
 export async function getActiveTimer(
   supabase: SupabaseClient,
   clientId: string,
-  advisorUserId: string
+  advisorUserId?: string,
+  role?: string
 ): Promise<{ started_at: string; task?: string } | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('active_timers')
     .select('started_at, task')
-    .eq('client_id', clientId)
-    .eq('advisor_user_id', advisorUserId)
-    .maybeSingle();
+    .eq('client_id', clientId);
+
+  // Only filter by advisor_user_id when role is admin AND advisorUserId is provided
+  // For client role, ignore advisorUserId to return any active timer for the client
+  if (role === 'admin' && advisorUserId) {
+    query = query.eq('advisor_user_id', advisorUserId);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     throw new AppError(

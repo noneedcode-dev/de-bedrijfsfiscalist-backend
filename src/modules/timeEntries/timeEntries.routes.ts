@@ -5,7 +5,7 @@ import { asyncHandler } from '../../middleware/errorHandler';
 import { handleValidationErrors } from '../../utils/validation';
 import { auditLogService } from '../../services/auditLogService';
 import { AuditActions } from '../../constants/auditActions';
-import { requireRole } from '../auth/auth.middleware';
+import { requireRole, requireAuth } from '../auth/auth.middleware';
 import * as timeEntriesService from './timeEntries.service';
 
 export const timeEntriesRouter = Router({ mergeParams: true });
@@ -391,26 +391,27 @@ timeEntriesRouter.post(
 
 /**
  * GET /api/clients/:clientId/time-entries/timer/active
- * Get active timer (admin only)
+ * Get active timer (admin + client)
  */
 timeEntriesRouter.get(
   '/timer/active',
-  requireRole('admin'),
+  requireAuth,
   [
     param('clientId').isUUID().withMessage('Invalid clientId format'),
-    query('advisor_user_id').isUUID().withMessage('Invalid advisor_user_id format'),
+    query('advisor_user_id').optional().isUUID().withMessage('Invalid advisor_user_id format'),
   ],
   handleValidationErrors,
   asyncHandler(async (req: Request, res: Response) => {
     const clientId = req.params.clientId;
-    const advisorUserId = req.query.advisor_user_id as string;
+    const advisorUserId = req.query.advisor_user_id as string | undefined;
 
-    const supabase = createSupabaseAdminClient();
+    const supabase = getSupabase(req);
 
     const activeTimer = await timeEntriesService.getActiveTimer(
       supabase,
       clientId,
-      advisorUserId
+      advisorUserId,
+      req.user?.role
     );
 
     auditLogService.logAsync({

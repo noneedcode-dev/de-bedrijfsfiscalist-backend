@@ -111,7 +111,7 @@ describe('Time Entries Timer API', () => {
   });
 
   describe('GET /api/clients/:clientId/time-entries/timer/active', () => {
-    it('should require admin role', async () => {
+    it('should allow client to access their own active timer', async () => {
       const clientToken = generateToken({ 
         sub: 'user123', 
         role: 'client', 
@@ -120,15 +120,43 @@ describe('Time Entries Timer API', () => {
       
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/time-entries/timer/active`)
-        .query({ advisor_user_id: MOCK_ADVISOR_ID })
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${clientToken}`);
+      
+      // Will fail at DB level in test, but auth should pass (not 403)
+      expect([200, 500]).toContain(res.status);
+    });
+
+    it('should prevent client from accessing different clientId', async () => {
+      const clientToken = generateToken({ 
+        sub: 'user123', 
+        role: 'client', 
+        client_id: MOCK_CLIENT_ID 
+      });
+      
+      const differentClientId = '999e4567-e89b-12d3-a456-426614174999';
+      const res = await request(app)
+        .get(`/api/clients/${differentClientId}/time-entries/timer/active`)
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`);
       
       expect(res.status).toBe(403);
-      expect(res.body.code).toBe('AUTH_INSUFFICIENT_PERMISSIONS');
+      expect(res.body.code).toBe('CLIENT_ACCESS_DENIED');
     });
 
-    it('should validate advisor_user_id format', async () => {
+    it('should allow admin to access any client active timer', async () => {
+      const adminToken = generateToken({ sub: 'admin123', role: 'admin' });
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/time-entries/timer/active`)
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${adminToken}`);
+      
+      // Will fail at DB level in test, but auth should pass
+      expect([200, 500]).toContain(res.status);
+    });
+
+    it('should validate advisor_user_id format when provided', async () => {
       const adminToken = generateToken({ sub: 'admin123', role: 'admin' });
       
       const res = await request(app)
@@ -141,7 +169,7 @@ describe('Time Entries Timer API', () => {
       expect(res.body.code).toBe('VALIDATION_FAILED');
     });
 
-    it('should require advisor_user_id query param', async () => {
+    it('should allow optional advisor_user_id query param', async () => {
       const adminToken = generateToken({ sub: 'admin123', role: 'admin' });
       
       const res = await request(app)
@@ -149,8 +177,21 @@ describe('Time Entries Timer API', () => {
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${adminToken}`);
       
-      expect(res.status).toBe(422);
-      expect(res.body.code).toBe('VALIDATION_FAILED');
+      // Will fail at DB level in test, but validation should pass (advisor_user_id is now optional)
+      expect([200, 500]).toContain(res.status);
+    });
+
+    it('should filter by advisor_user_id when admin provides it', async () => {
+      const adminToken = generateToken({ sub: 'admin123', role: 'admin' });
+      
+      const res = await request(app)
+        .get(`/api/clients/${MOCK_CLIENT_ID}/time-entries/timer/active`)
+        .query({ advisor_user_id: MOCK_ADVISOR_ID })
+        .set('x-api-key', MOCK_API_KEY)
+        .set('Authorization', `Bearer ${adminToken}`);
+      
+      // Will fail at DB level in test, but auth should pass
+      expect([200, 500]).toContain(res.status);
     });
   });
 
@@ -187,7 +228,7 @@ describe('Time Entries Timer API', () => {
       expect(res.status).toBe(403);
     });
 
-    it('should prevent client from viewing active timer', async () => {
+    it('should allow client to view their own active timer', async () => {
       const clientToken = generateToken({ 
         sub: 'user123', 
         role: 'client', 
@@ -196,11 +237,11 @@ describe('Time Entries Timer API', () => {
       
       const res = await request(app)
         .get(`/api/clients/${MOCK_CLIENT_ID}/time-entries/timer/active`)
-        .query({ advisor_user_id: MOCK_ADVISOR_ID })
         .set('x-api-key', MOCK_API_KEY)
         .set('Authorization', `Bearer ${clientToken}`);
       
-      expect(res.status).toBe(403);
+      // Will fail at DB level in test, but auth should pass (not 403)
+      expect([200, 500]).toContain(res.status);
     });
   });
 
