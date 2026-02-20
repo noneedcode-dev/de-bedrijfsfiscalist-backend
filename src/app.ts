@@ -25,6 +25,7 @@ import { adminRouter } from './modules/admin/admin.routes';
 import { authRouter } from './modules/auth/auth.routes';
 import messagesRouter from './modules/messages/messages.routes';
 import { timeEntriesRouter } from './modules/timeEntries/timeEntries.routes';
+import { timeEntriesAdminRouter } from './modules/timeEntries/timeEntries.admin.routes';
 import { billingRouter } from './modules/billing/billing.routes';
 import { invoicesRouter } from './modules/invoices/invoices.routes';
 
@@ -86,6 +87,7 @@ export function createApp() {
   // Admin routes: /api/admin/* (requires JWT + admin role)
   // Apply invitation limiter specifically to invitation endpoints
   app.use('/api/admin/users/invite', invitationLimiter);
+  app.use('/api/admin/time-entries', timeEntriesAdminRouter);
   app.use('/api/admin', authenticateJWT, adminRouter);
 
   // Client-scoped routes: require JWT + client access validation
