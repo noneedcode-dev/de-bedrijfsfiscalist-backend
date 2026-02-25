@@ -22,6 +22,13 @@ export interface TimeEntry {
   deleted_by?: string;
 }
 
+export interface EnrichedTimeEntry extends TimeEntry {
+  client_name: string | null;
+  advisor_name: string | null;
+  started_at_formatted: string | null;
+  elapsed_minutes: number | null;
+}
+
 export interface ActiveTimer {
   id: string;
   client_id: string;

@@ -59,6 +59,64 @@ timeEntriesRouter.get(
       offset,
     });
 
+    // Enrich time entries with client_name, advisor_name, started_at_formatted, elapsed_minutes
+    const entries = data ?? [];
+
+    // 1. Fetch client name (single lookup)
+    const { data: clientRow, error: clientErr } = await supabase
+      .from('clients')
+      .select('name')
+      .eq('id', clientId)
+      .maybeSingle();
+    if (clientErr) throw clientErr;
+
+    const clientName = clientRow?.name ?? null;
+
+    // 2. Fetch advisor names (batch lookup)
+    const advisorIds = Array.from(
+      new Set(entries.map(e => e.advisor_user_id).filter(Boolean))
+    );
+
+    const advisorNameById = new Map<string, string | null>();
+    if (advisorIds.length) {
+      const { data: advisors, error: advErr } = await supabase
+        .from('app_users')
+        .select('id,full_name,email')
+        .in('id', advisorIds);
+      if (advErr) throw advErr;
+
+      for (const a of advisors ?? []) {
+        advisorNameById.set(a.id, a.full_name ?? a.email ?? null);
+      }
+    }
+
+    // 3. Format helper for MM/DD/YYYY HH:mm
+    const formatMMDDYYYYHHmm = (d: Date) =>
+      new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(d).replace(',', '');
+
+    // 4. Enrich each entry
+    const enriched = entries.map(e => {
+      // worked_at is a DATE field, so we use it as the start time (at midnight UTC)
+      const workedAt = e.worked_at ? new Date(e.worked_at + 'T00:00:00Z') : null;
+
+      return {
+        ...e,
+        client_name: clientName,
+        advisor_name: e.advisor_user_id
+          ? (advisorNameById.get(e.advisor_user_id) ?? null)
+          : null,
+        started_at_formatted: workedAt ? formatMMDDYYYYHHmm(workedAt) : null,
+        elapsed_minutes: typeof e.minutes === 'number' ? Math.max(0, Math.floor(e.minutes)) : null
+      };
+    });
+
     auditLogService.logAsync({
       client_id: clientId,
       actor_user_id: req.user?.sub,
@@ -75,7 +133,7 @@ timeEntriesRouter.get(
     });
 
     res.json({
-      data,
+      data: enriched,
       meta: {
         total: count,
         limit,
