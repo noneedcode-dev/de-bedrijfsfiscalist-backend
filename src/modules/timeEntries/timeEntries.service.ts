@@ -429,10 +429,10 @@ export async function getActiveTimer(
   clientId: string,
   advisorUserId?: string,
   role?: string
-): Promise<{ started_at: string; task?: string; advisor_user_id: string } | null> {
+): Promise<{ started_at: string; task?: string; advisor_user_id: string; client_id: string } | null> {
   let query = supabase
     .from('active_timers')
-    .select('started_at, task, advisor_user_id')
+    .select('started_at, task, advisor_user_id, client_id')
     .eq('client_id', clientId);
 
   // Only filter by advisor_user_id when role is admin AND advisorUserId is provided
