@@ -464,7 +464,7 @@ timeEntriesRouter.get(
       hour12: false,
     }).format(startedAt).replace(',', '');
 
-    res.json({
+    return res.json({
       data: {
         ...activeTimer,
         client_name: clientRow?.name ?? null,
