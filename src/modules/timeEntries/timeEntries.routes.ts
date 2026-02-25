@@ -428,8 +428,50 @@ timeEntriesRouter.get(
       },
     });
 
+    if (!activeTimer) {
+      return res.json({
+        data: null,
+        meta: {
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    const { data: clientRow, error: clientErr } = await supabase
+      .from('clients')
+      .select('name')
+      .eq('id', clientId)
+      .maybeSingle();
+    if (clientErr) throw clientErr;
+
+    const { data: advisorRow, error: advErr } = await supabase
+      .from('app_users')
+      .select('full_name,email')
+      .eq('id', activeTimer.advisor_user_id)
+      .maybeSingle();
+    if (advErr) throw advErr;
+
+    const startedAt = new Date(activeTimer.started_at);
+    const now = new Date();
+    const elapsedMinutes = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 60000));
+
+    const startedAtFormatted = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(startedAt).replace(',', '');
+
     res.json({
-      data: activeTimer,
+      data: {
+        ...activeTimer,
+        client_name: clientRow?.name ?? null,
+        advisor_name: advisorRow?.full_name ?? advisorRow?.email ?? null,
+        started_at_formatted: startedAtFormatted,
+        elapsed_minutes: elapsedMinutes,
+      },
       meta: {
         timestamp: new Date().toISOString(),
       },
